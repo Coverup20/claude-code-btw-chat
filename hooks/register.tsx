@@ -1,11 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type {
-  ClientProps,
-  EngineInterface,
-  ModelForkResult,
-  Register,
-  RenderElement,
-} from 'claude-code'
+import type { ModelForkResult, Register } from 'claude-code'
 
 import type { BtwMessage } from '../types'
 
@@ -32,18 +26,6 @@ const scrollBack = atom({ plugin: 'btw-chat', key: 'scrollBack' } as const, 0, {
 const tick = atom({ plugin: 'btw-chat', key: 'tick' } as const, 0, {
   shape: 'tick-1',
 })
-// Whether the ring sits on the composer field: unfocused, the pane draws the
-// draft itself, since the surface's field loses its text on blur.
-const focused = atom({ plugin: 'btw-chat', key: 'focused' } as const, false, {
-  shape: 'focused-1',
-})
-const composerAck = atom(
-  { plugin: 'btw-chat', key: 'composerAck' } as const,
-  { clientId: '', revision: 0, submitted: 0 },
-  {
-    shape: 'composer-1',
-  },
-)
 
 const THINKING_FRAMES = ['✢', '✳', '✶', '✻', '✽'] as const
 let ticker: { cancel: () => void } | null = null
@@ -81,35 +63,9 @@ function describeFailure(r: ModelForkResult): string {
   }
 }
 
-async function askQuestion($: EngineInterface, question: string) {
-  const id = nextId()
-  await update($, scrollBack, () => 0)
-  await update($, msgs, list =>
-    [...list, { id, q: question, pending: true }].slice(-MAX_EXCHANGES_KEPT),
-  )
-
-  const prior = (await read($, msgs)).filter(m => m.id !== id)
-  ticker?.cancel()
-  try {
-    ticker = $.clock.every(140, () => {
-      void update($, tick, n => n + 1)
-    })
-  } catch {
-    // No clock in this host (a test harness, say): the spinner stays still.
-    ticker = null
-  }
-  const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
-  ticker?.cancel()
-  ticker = null
-  const answer = r.isAnswered ? r.text : describeFailure(r)
-  await update($, msgs, list =>
-    list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
-  )
-}
-
 type Row = {
   text: string
-  kind: 'question' | 'answer' | 'info' | 'pending'
+  kind: 'question' | 'answer' | 'info' | 'draft' | 'pending'
   pending: boolean
 }
 
@@ -178,50 +134,6 @@ function buildRows(
   return rows
 }
 
-type ValidatedSubmission = { sequence: number; text: string }
-type ValidatedComposerData = {
-  clientId: string
-  revision: number
-  draft: string
-  submissions: ValidatedSubmission[]
-}
-
-function parseComposerData(raw: unknown): ValidatedComposerData | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-  const obj = raw as Record<string, unknown>
-
-  const clientId = obj.clientId
-  if (typeof clientId !== 'string' || clientId === '' || clientId.length > 128) return null
-
-  const revision = obj.revision
-  if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision <= 0) return null
-
-  const draft = obj.draft
-  if (typeof draft !== 'string' || draft.length > 24000) return null
-
-  const subs = obj.submissions
-  if (!Array.isArray(subs) || subs.length > 100) return null
-
-  const submissions: ValidatedSubmission[] = []
-  let prevSeq = 0
-  for (const s of subs) {
-    if (!s || typeof s !== 'object' || Array.isArray(s)) return null
-    const subObj = s as Record<string, unknown>
-
-    const seq = subObj.sequence
-    if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq <= 0) return null
-    if (seq <= prevSeq) return null
-    prevSeq = seq
-
-    const text = subObj.text
-    if (typeof text !== 'string' || text.length > 24000 || text.trim() === '') return null
-
-    submissions.push({ sequence: seq, text })
-  }
-
-  return { clientId, revision, draft, submissions }
-}
-
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -267,50 +179,32 @@ export const register: Register = on => {
     const question = e.value.trim()
     await update($, draft, () => '')
     if (!question) return { element: e.element, value: '' }
-    await askQuestion($, question)
+
+    const id = nextId()
+    await update($, scrollBack, () => 0)
+    await update($, msgs, list =>
+      [...list, { id, q: question, pending: true }].slice(-MAX_EXCHANGES_KEPT),
+    )
+
+    const prior = (await read($, msgs)).filter(m => m.id !== id)
+    ticker?.cancel()
+    try {
+      ticker = $.clock.every(140, () => {
+        void update($, tick, n => n + 1)
+      })
+    } catch {
+      // No clock in this host (a test harness, say): the spinner stays still.
+      ticker = null
+    }
+    const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
+    ticker?.cancel()
+    ticker = null
+    const answer = r.isAnswered ? r.text : describeFailure(r)
+    await update($, msgs, list =>
+      list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
+    )
 
     return { element: e.element, value: '' }
-  })
-
-  on('ui.message', { component: 'Pane', requestId: PANE, element: 'composer' }, async ($, e) => {
-    const data = parseComposerData(e.data)
-    if (!data) return {}
-
-    let accepted = false
-    let questions: ValidatedSubmission[] = []
-
-    await update($, composerAck, current => {
-      accepted = false
-      questions = []
-      const sameId = data.clientId === current.clientId
-      if (sameId && data.revision <= current.revision) {
-        return current
-      }
-      accepted = true
-      const previousSubmitted = sameId ? current.submitted : 0
-      questions = data.submissions.filter(s => s.sequence > previousSubmitted)
-      const lastSeq = data.submissions.length > 0 ? data.submissions[data.submissions.length - 1]!.sequence : 0
-      return {
-        clientId: data.clientId,
-        revision: data.revision,
-        submitted: Math.max(previousSubmitted, lastSeq),
-      }
-    })
-
-    if (!accepted) return {}
-
-    await update($, draft, () => data.draft)
-    for (const sub of questions) {
-      await askQuestion($, sub.text.trim())
-    }
-
-    return {}
-  })
-
-  on('ui.focus', async ($, e, next) => {
-    const onField = e.requestId === PANE && e.element === 'ask'
-    await update($, focused, () => onField)
-    return next(e)
   })
 
   // The person's wheel and keys over the pane: move our own window instead of
@@ -322,46 +216,23 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const resolved = $.ui.resolve(e)
-    const { Box, Text, Button } = resolved
-    // A surface that offers Client gets the wrapping editor; the rest keep the
-    // native field. Decided by the element table, not the surface's name.
-    const canClient = 'Client' in (resolved as object) && e.surface !== 'terminal'
+    const { Box, Text, Input, Button } = $.ui.resolve(e)
     const list = await read($, msgs)
     const text = await read($, draft)
     const back = await read($, scrollBack)
-    const ack = await read($, composerAck)
 
     // Frame border and padding take six columns; keep a sane floor.
     const width = Math.max(12, e.props.bodyColumns - 6)
-    const composerColumns = Math.max(4, e.props.bodyColumns - 10)
-
-    const effWidth = Math.max(1, composerColumns - 1)
-    let estimatedRows = 0
-    for (const para of text.split('\n')) {
-      const len = [...para].length
-      estimatedRows += Math.max(1, Math.floor(len / effWidth) + 1)
-    }
-
-    const bodyRows = e.props.scroll.bodyRows
-    const isFocused = await read($, focused)
-    // Unfocused, the terminal's field forgets its text, so the pane draws the
-    // draft itself: the field keeps one row (a click target) and the wrapped
-    // draft sits under it. Focused, the field is the only view.
-    const draftLines = text === '' ? [] : wrap(text, width)
-    const unfocusedRows = text === '' ? 0 : Math.min(7, draftLines.length)
-    // Where Client exists the editor wraps by itself; on the terminal the
-    // field never wraps, so it starts at three rows and grows with the
-    // newlines the person types (Shift+Enter).
-    const inputRows = canClient
-      ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
-      : isFocused
-        ? Math.min(6, Math.max(1, text.split('\n').length))
-        : 1 + unfocusedRows
-
-    // Padding (two), the field and its top margin, the footer's three rows.
-    const overhead = inputRows + 6
-    const room = Math.max(1, bodyRows - overhead)
+    // The field is as tall as what was typed: one row at rest, wrapping as
+    // the text grows, at most six.
+    // One row keeps the surface's own hint down to the bare ⏎ glyph; a draft
+    // longer than the field is shown wrapped, in dim, just above it.
+    const inputRows = 1
+    // The frame is an overlay and takes no rows: only the padding (two), the
+    // input block (its two border rows, its field, its top margin) and the
+    // footer (its two margins and its row) come off the body.
+    const overhead = 2 + (inputRows + 3) + 3
+    const room = Math.max(2, e.props.scroll.bodyRows - overhead)
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
@@ -369,58 +240,10 @@ export const register: Register = on => {
     const start = Math.max(0, maxStart - back)
     const windowRows = rows.slice(start, start + room)
 
-    let composer: RenderElement
-    if (canClient) {
-      const Client = (
-        resolved as unknown as {
-          Client: (props: ClientProps) => RenderElement
-        }
-      ).Client
-      composer = (
-        <Client
-          key="composer"
-          module="./composer.tsx"
-          width="100%"
-          height={inputRows}
-          props={{
-            value: text,
-            columns: composerColumns,
-            rows: inputRows,
-            ackClient: ack.clientId,
-            ackRevision: ack.revision,
-            ackSubmit: ack.submitted,
-          }}
-        />
-      )
-    } else {
-      const { Input } = resolved
-      composer = (
-        <Box flexDirection="column">
-          <Input
-            key="ask"
-            placeholder="Ask a side question…"
-            submitLabel=""
-            autoFocus
-            rows={isFocused ? inputRows : 1}
-            value={text}
-            onInput={() => {}}
-            onSubmit={() => {}}
-          />
-          {!isFocused && draftLines.length > 0 && (
-            <Box flexDirection="column">
-              {draftLines.slice(0, 7).map(line => (
-                <Text dimColor>{line}</Text>
-              ))}
-            </Box>
-          )}
-        </Box>
-      )
-    }
-
     return (
       <Box
         flexDirection="column"
-        height={bodyRows}
+        height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
       >
         {/* No padding on this Box: the overlay's offsets measure from its
@@ -442,24 +265,39 @@ export const register: Register = on => {
         >
         {/* The history keeps a fixed height too: `room` rows whatever the text. */}
         <Box flexDirection="column" height={room}>
-          {windowRows.map(row =>
-            row.kind === 'question' ? (
-              // The main thread's own mark: a green chevron, the text plain.
-              <Box flexDirection="row">
-                <Text color="success">❯ </Text>
-                <Text>{row.text.replace(/^❯ /, '')}</Text>
-              </Box>
-            ) : (
-              <Text
-                dimColor={row.kind === 'info' || row.kind === 'pending' || row.pending}
-              >
-                {row.text}
-              </Text>
-            ),
-          )}
+          {windowRows.map(row => (
+            <Text
+              color={row.kind === 'question' ? 'claude' : undefined}
+              weight={row.kind === 'question' ? 'bold' : undefined}
+              dimColor={
+                row.kind === 'info' ||
+                row.kind === 'draft' ||
+                row.kind === 'pending' ||
+                row.pending
+              }
+            >
+              {row.text}
+            </Text>
+          ))}
         </Box>
-        <Box marginTop={1} paddingX={1} flexDirection="column">
-          {composer}
+        <Box
+          marginTop={1}
+          borderStyle="round"
+          borderColor="promptBorder"
+          paddingX={1}
+        >
+          <Input
+            key="ask"
+            placeholder="Ask a side question…"
+            // The surface prefixes any submitLabel with its own ⏎ glyph, so an
+            // empty one is the smallest hint it draws.
+            submitLabel=""
+            autoFocus
+            rows={inputRows}
+            value={text}
+            onInput={() => {}}
+            onSubmit={() => {}}
+          />
         </Box>
         <Box
           marginTop={1}
