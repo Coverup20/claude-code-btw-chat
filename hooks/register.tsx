@@ -299,6 +299,9 @@ export const register: Register = on => {
           <Input
             key="ask"
             placeholder="Ask a side question…"
+            // The surface prefixes any submitLabel with its own ⏎ glyph, so an
+            // empty one is the smallest hint it draws.
+            submitLabel=""
             autoFocus
             rows={inputRows}
             value={text}
