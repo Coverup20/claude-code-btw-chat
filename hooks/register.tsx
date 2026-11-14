@@ -253,8 +253,11 @@ export const register: Register = on => {
     const columns = e.props.bodyColumns
     const fieldRows = rowsFor(text, columns)
 
-    // Two columns of air on the left, the exchanges and the field alike.
-    const width = Math.max(12, columns - 4)
+    // One column of air on the left, the exchanges and the field alike. The
+    // field cannot take a second one: the engine counts its width from the pane
+    // body and leaves exactly one cell spare, so a wider inset would cut the
+    // tail of the row.
+    const width = Math.max(12, columns - 2)
     // The field's frame, full width: two cornered rules. They cost the field
     // nothing — a Box border would, and the engine would then cut every
     // wrapped row with an ellipsis.
@@ -276,7 +279,7 @@ export const register: Register = on => {
         height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
       >
-        <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
+        <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
           {windowRows.map(row => (
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
@@ -294,10 +297,11 @@ export const register: Register = on => {
         <Box flexDirection="column">
           <Text color="promptBorder">{top}</Text>
           {/* The frame spans the pane; only the text inside it is indented, so
-              the cursor starts clear of the left border. Two columns is the
-              most the engine allows: it counts the field's width from the pane
-              body and leaves just one cell spare. */}
-          <Box paddingLeft={2}>
+              the cursor starts clear of the left border. One column is the most
+              the engine allows: it counts the field's width from the pane body
+              and leaves just one cell spare, so a wider inset would cut the
+              tail of every full row. */}
+          <Box paddingLeft={1}>
             <Input
               key="ask"
               placeholder="Ask a side question…"
@@ -314,7 +318,7 @@ export const register: Register = on => {
         <Box
           marginTop={1}
           marginBottom={1}
-          paddingX={2}
+          paddingX={1}
           flexDirection="row"
           justifyContent="space-between"
         >
