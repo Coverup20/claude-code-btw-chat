@@ -145,17 +145,15 @@ export const register: Register = on => {
         {shown.map(m => (
           <Box flexDirection="column" marginBottom={1}>
             <Box flexDirection="row">
-              <Text color="success" weight="bold">
+              <Text color="claude" weight="bold">
                 ›{' '}
               </Text>
               <Text weight="bold">{m.q}</Text>
             </Box>
             <Box paddingLeft={2}>
-              {m.pending ? (
-                <Text dimColor>thinking…</Text>
-              ) : (
-                <Text color="#FFA500">{m.answer}</Text>
-              )}
+              <Text dimColor={m.pending}>
+                {m.pending ? 'thinking…' : m.answer}
+              </Text>
             </Box>
           </Box>
         ))}
