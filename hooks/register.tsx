@@ -232,7 +232,8 @@ export const register: Register = on => {
           borderStyle="round"
           borderColor="#FFA500"
         />
-        <Box flexDirection="column" flexGrow={1}>
+        {/* The history keeps a fixed height too: `room` rows whatever the text. */}
+        <Box flexDirection="column" height={room}>
           {windowRows.map(row => (
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
