@@ -222,9 +222,9 @@ export const register: Register = on => {
         flexDirection="column"
         height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
-        paddingX={2}
-        paddingY={1}
       >
+        {/* No padding on this Box: the overlay's offsets measure from its
+            content box, and a padded root pulled the frame inside the edge. */}
         <Box
           position="absolute"
           top={0}
@@ -234,6 +234,12 @@ export const register: Register = on => {
           borderStyle="round"
           borderColor="#FFA500"
         />
+        <Box
+          flexDirection="column"
+          flexGrow={1}
+          paddingX={2}
+          paddingY={1}
+        >
         {/* The history keeps a fixed height too: `room` rows whatever the text. */}
         <Box flexDirection="column" height={room}>
           {windowRows.map(row => (
@@ -282,6 +288,7 @@ export const register: Register = on => {
           >
             <Text dimColor>Clear</Text>
           </Button>
+        </Box>
         </Box>
       </Box>
     )
