@@ -253,12 +253,12 @@ export const register: Register = on => {
     const columns = e.props.bodyColumns
     const fieldRows = rowsFor(text, columns)
 
-    // One column of air on the left, for the exchanges and the field alike.
-    // The field cannot take more: the engine counts its own width from the
-    // pane body and already leaves one cell spare, so a second cell of margin
-    // would clip the tail of every row.
-    const width = Math.max(12, columns - 2)
-    const flat = '─'.repeat(Math.max(8, columns - 3))
+    // Two columns of air on the left, the exchanges and the field alike.
+    const width = Math.max(12, columns - 4)
+    // The field's frame, full width: two cornered rules. They cost the field
+    // nothing — a Box border would, and the engine would then cut every
+    // wrapped row with an ellipsis.
+    const flat = '─'.repeat(Math.max(8, columns - 2))
     const top = `╭${flat}╮`
     const bottom = `╰${flat}╯`
     // Rows the exchanges may take: everything but the field, its rules and the
@@ -276,7 +276,7 @@ export const register: Register = on => {
         height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
       >
-        <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
+        <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
           {windowRows.map(row => (
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
@@ -291,24 +291,30 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
-        <Box flexDirection="column" marginLeft={1}>
+        <Box flexDirection="column">
           <Text color="promptBorder">{top}</Text>
-          <Input
-            key="ask"
-            placeholder="Ask a side question…"
-            submitLabel="send"
-            autoFocus
-            value={text}
-            rows={fieldRows}
-            onInput={() => {}}
-            onSubmit={() => {}}
-          />
+          {/* The frame spans the pane; only the text inside it is indented, so
+              the cursor starts clear of the left border. Two columns is the
+              most the engine allows: it counts the field's width from the pane
+              body and leaves just one cell spare. */}
+          <Box paddingLeft={2}>
+            <Input
+              key="ask"
+              placeholder="Ask a side question…"
+              submitLabel="send"
+              autoFocus
+              value={text}
+              rows={fieldRows}
+              onInput={() => {}}
+              onSubmit={() => {}}
+            />
+          </Box>
           <Text color="promptBorder">{bottom}</Text>
         </Box>
         <Box
           marginTop={1}
           marginBottom={1}
-          paddingX={1}
+          paddingX={2}
           flexDirection="row"
           justifyContent="space-between"
         >
