@@ -228,8 +228,6 @@ export const register: Register = on => {
     // One row keeps the surface's own hint down to the bare ⏎ glyph; a draft
     // longer than the field is shown wrapped, in dim, just above it.
     const inputRows = 1
-    const draftLines = text.trim() === '' ? [] : wrap(text, width)
-    const preview = draftLines.length > 1 ? draftLines.slice(0, 4) : []
     // The frame is an overlay and takes no rows: only the padding (two), the
     // input block (its two border rows, its field, its top margin) and the
     // footer (its two margins and its row) come off the body.
@@ -238,17 +236,9 @@ export const register: Register = on => {
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
-    // A long draft shows wrapped at the tail of the history, in dim: the
-    // layout never moves while the person types.
-    const draftRows: Row[] = preview.map(line => ({
-      text: line,
-      kind: 'draft',
-      pending: false,
-    }))
-    const shownRows = draftRows.length > 0 ? [...rows, ...draftRows] : rows
-    const maxStart = Math.max(0, shownRows.length - room)
+    const maxStart = Math.max(0, rows.length - room)
     const start = Math.max(0, maxStart - back)
-    const windowRows = shownRows.slice(start, start + room)
+    const windowRows = rows.slice(start, start + room)
 
     return (
       <Box
