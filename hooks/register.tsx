@@ -298,7 +298,6 @@ export const register: Register = on => {
         >
           <Input
             key="ask"
-            label="❯ "
             placeholder="Ask a side question…"
             submitLabel=""
             autoFocus
@@ -316,7 +315,6 @@ export const register: Register = on => {
           flexDirection="row"
           justifyContent="space-between"
         >
-          <Text dimColor>enter to send</Text>
           <Button
             key="clear"
             onPress={() => {
