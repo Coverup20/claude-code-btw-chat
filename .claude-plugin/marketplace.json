@@ -10,11 +10,7 @@
     {
       "name": "btw-chat",
       "description": "A pane and slash command for a continuous /btw conversation",
-      "source": {
-        "source": "npm",
-        "package": "claude-code-btw-chat",
-        "version": "0.1.0"
-      }
+      "source": "./"
     }
   ]
 }

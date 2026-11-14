@@ -8,8 +8,8 @@ earlier side exchanges with it, and never touches the main conversation.
 
 ## Installation
 
-The plugin is published to npm and listed in this repository's marketplace,
-which declares an `npm` source pinned to the published version.
+The plugin is listed in this repository's marketplace, which serves the
+plugin from the repository root.
 
 Via chat:
 
