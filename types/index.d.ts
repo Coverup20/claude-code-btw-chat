@@ -18,6 +18,7 @@ declare module 'claude-code' {
       draft: Shaped<string>
       scrollBack: Shaped<number>
       tick: Shaped<number>
+      focused: Shaped<boolean>
       composerAck: Shaped<BtwComposerAck>
     }
   }

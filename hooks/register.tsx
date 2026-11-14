@@ -32,6 +32,11 @@ const scrollBack = atom({ plugin: 'btw-chat', key: 'scrollBack' } as const, 0, {
 const tick = atom({ plugin: 'btw-chat', key: 'tick' } as const, 0, {
   shape: 'tick-1',
 })
+// Whether the ring sits on the composer field: unfocused, the pane draws the
+// draft itself, since the surface's field loses its text on blur.
+const focused = atom({ plugin: 'btw-chat', key: 'focused' } as const, false, {
+  shape: 'focused-1',
+})
 const composerAck = atom(
   { plugin: 'btw-chat', key: 'composerAck' } as const,
   { clientId: '', revision: 0, submitted: 0 },
@@ -302,6 +307,12 @@ export const register: Register = on => {
     return {}
   })
 
+  on('ui.focus', async ($, e, next) => {
+    const onField = e.requestId === PANE && e.element === 'ask'
+    await update($, focused, () => onField)
+    return next(e)
+  })
+
   // The person's wheel and keys over the pane: move our own window instead of
   // the engine's, which stays pinned so the frame holds still.
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
@@ -333,12 +344,20 @@ export const register: Register = on => {
     }
 
     const bodyRows = e.props.scroll.bodyRows
+    const isFocused = await read($, focused)
+    // Unfocused, the terminal's field forgets its text, so the pane draws the
+    // draft itself: the field keeps one row (a click target) and the wrapped
+    // draft sits under it. Focused, the field is the only view.
+    const draftLines = text === '' ? [] : wrap(text, width)
+    const unfocusedRows = text === '' ? 0 : Math.min(7, draftLines.length)
     // Where Client exists the editor wraps by itself; on the terminal the
     // field never wraps, so it starts at three rows and grows with the
     // newlines the person types (Shift+Enter).
     const inputRows = canClient
       ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
-      : Math.min(6, Math.max(3, text.split('\n').length))
+      : isFocused
+        ? Math.min(6, Math.max(3, text.split('\n').length))
+        : 1 + unfocusedRows
 
     const overhead = inputRows + 8
     const room = Math.max(1, bodyRows - overhead)
@@ -375,16 +394,25 @@ export const register: Register = on => {
     } else {
       const { Input } = resolved
       composer = (
-        <Input
-          key="ask"
-          placeholder="Ask a side question…"
-          submitLabel=""
-          autoFocus
-          rows={inputRows}
-          value={text}
-          onInput={() => {}}
-          onSubmit={() => {}}
-        />
+        <Box flexDirection="column">
+          <Input
+            key="ask"
+            placeholder="Ask a side question…"
+            submitLabel=""
+            autoFocus
+            rows={isFocused ? inputRows : 1}
+            value={text}
+            onInput={() => {}}
+            onSubmit={() => {}}
+          />
+          {!isFocused && draftLines.length > 0 && (
+            <Box flexDirection="column">
+              {draftLines.slice(0, 7).map(line => (
+                <Text dimColor>{line}</Text>
+              ))}
+            </Box>
+          )}
+        </Box>
       )
     }
 
@@ -444,7 +472,9 @@ export const register: Register = on => {
           flexDirection="row"
           justifyContent="space-between"
         >
-          <Text dimColor>d{text.length}</Text>
+          <Text dimColor>
+            d{text.length} f{isFocused ? 1 : 0}
+          </Text>
           <Button
             key="clear"
             onPress={() => {
