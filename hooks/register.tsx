@@ -296,12 +296,12 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="column">
           <Text color="promptBorder">{top}</Text>
-          {/* The frame spans the pane. The engine leaves exactly one spare cell
-              in the field's row, and it goes on the right: with the field
-              unfocused the engine draws the value across the whole row, and this
-              column is what keeps a wrapped row off the border. On the left the
-              text starts at the frame's own edge. */}
-          <Box paddingRight={1}>
+          {/* The frame spans the pane; only the text inside it is indented, so
+              the cursor starts clear of the left border. One column is the most
+              the engine allows: it counts the field's width from the pane body
+              and leaves just one cell spare, so a wider inset would cut the
+              tail of every full row. */}
+          <Box paddingLeft={1}>
             <Input
               key="ask"
               placeholder="Ask a side question…"
