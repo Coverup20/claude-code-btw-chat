@@ -253,12 +253,12 @@ export const register: Register = on => {
     const columns = e.props.bodyColumns
     const fieldRows = rowsFor(text, columns)
 
-    // The exchanges sit in the pane's own two columns of padding.
-    const width = Math.max(12, columns - 4)
-    // The field's frame: two cornered rules, full width. They cost the field
-    // nothing — a Box border would, and the engine would then cut every
-    // wrapped row with an ellipsis.
-    const flat = '─'.repeat(Math.max(8, columns - 2))
+    // One column of air on the left, for the exchanges and the field alike.
+    // The field cannot take more: the engine counts its own width from the
+    // pane body and already leaves one cell spare, so a second cell of margin
+    // would clip the tail of every row.
+    const width = Math.max(12, columns - 2)
+    const flat = '─'.repeat(Math.max(8, columns - 3))
     const top = `╭${flat}╮`
     const bottom = `╰${flat}╯`
     // Rows the exchanges may take: everything but the field, its rules and the
@@ -276,7 +276,7 @@ export const register: Register = on => {
         height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
       >
-        <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
+        <Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1}>
           {windowRows.map(row => (
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
@@ -291,7 +291,7 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
-        <Box flexDirection="column">
+        <Box flexDirection="column" marginLeft={1}>
           <Text color="promptBorder">{top}</Text>
           <Input
             key="ask"
@@ -308,7 +308,7 @@ export const register: Register = on => {
         <Box
           marginTop={1}
           marginBottom={1}
-          paddingX={2}
+          paddingX={1}
           flexDirection="row"
           justifyContent="space-between"
         >
