@@ -42,7 +42,7 @@ test('each question forks the transcript with the earlier side exchanges', async
   expect(prompts[1]!.includes('answer 1')).toBe(true)
 
   expect((await ui.find({ type: 'Text', text: /answer 2/ }))?.text).toBe(
-    'answer 2',
+    '● answer 2',
   )
   await ui.unmount()
 })

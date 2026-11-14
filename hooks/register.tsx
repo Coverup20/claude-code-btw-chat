@@ -8,8 +8,6 @@ const PANE = 'btw-chat'
 // How many past side exchanges each fork carries, so the conversation stays
 // continuous without unbounded prompt growth.
 const MAX_EXCHANGES_IN_PROMPT = 12
-// How many exchanges the pane draws, most recent last.
-const MAX_EXCHANGES_DRAWN = 8
 // How many exchanges the session keeps at all.
 const MAX_EXCHANGES_KEPT = 50
 // How many rows the ask field grows to before it scrolls instead. The native
@@ -28,6 +26,18 @@ const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
 const draft = atom({ plugin: 'btw-chat', key: 'draft' } as const, '', {
   shape: 'draft-1',
 })
+// Rows scrolled back from the tail; the pane draws its own window over the
+// exchange rows so the frame never scrolls away with the content.
+const scrollBack = atom({ plugin: 'btw-chat', key: 'scrollBack' } as const, 0, {
+  shape: 'scroll-1',
+})
+// Repaints the thinking spinner while a fork runs.
+const tick = atom({ plugin: 'btw-chat', key: 'tick' } as const, 0, {
+  shape: 'tick-1',
+})
+
+const THINKING_FRAMES = ['✢', '✳', '✶', '✻', '✽'] as const
+let ticker: { cancel: () => void } | null = null
 
 // Unique per session; the timestamp keeps it so across reloads.
 let seq = 0
@@ -83,6 +93,71 @@ function rowsFor(text: string, bodyColumns: number): number {
   return Math.min(MAX_INPUT_ROWS, Math.max(1, rows))
 }
 
+type Row = {
+  text: string
+  kind: 'question' | 'answer' | 'info' | 'pending'
+  pending: boolean
+}
+
+// Greedy word wrap; a word longer than the line is cut. One string in, the
+// lines it takes out.
+function wrap(text: string, width: number): string[] {
+  const out: string[] = []
+  for (const para of text.split('\n')) {
+    if (para === '') {
+      out.push('')
+      continue
+    }
+    let line = ''
+    for (const word of para.split(' ')) {
+      if (line === '') line = word
+      else if (line.length + 1 + word.length <= width) line += ' ' + word
+      else {
+        out.push(line)
+        line = word
+      }
+      while (line.length > width) {
+        out.push(line.slice(0, width))
+        line = line.slice(width)
+      }
+    }
+    out.push(line)
+  }
+  return out
+}
+
+function buildRows(
+  list: readonly BtwMessage[],
+  width: number,
+  frame: string,
+): Row[] {
+  if (list.length === 0) {
+    return wrap(
+      'Ask below: each answer forks the session transcript without touching the main conversation.',
+      width,
+    ).map(text => ({ text, kind: 'info' as const, pending: false }))
+  }
+  const rows: Row[] = []
+  for (const m of list) {
+    // The main thread's own marks: a chevron on what the person said, a bullet
+    // on what came back, a spinner while it thinks.
+    for (const text of wrap(`❯ ${m.q}`, width)) {
+      rows.push({ text, kind: 'question', pending: false })
+    }
+    for (const text of m.pending
+      ? [`${frame} Thinking…`]
+      : wrap(m.answer ?? '', width).map((line, i) =>
+          i === 0 ? `● ${line}` : line,
+        )) {
+      rows.push({ text, kind: m.pending ? 'pending' : 'answer', pending: m.pending })
+    }
+    // A space, not an empty string: the desktop surface gives an empty Text no
+    // row, which would leave the tree shorter than bodyRows.
+    rows.push({ text: ' ', kind: 'answer', pending: false })
+  }
+  return rows
+}
+
 // Accept 'btw-chat', 'btw-chat:btw-chat' and '/btw-chat': the matcher form
 // `{ command: 'btw-chat' }` has been observed to miss the handler on some
 // builds, and plugin commands may arrive namespaced.
@@ -105,11 +180,13 @@ export const register: Register = on => {
   on('command.run', async ($, e, next) => {
     if (commandName(e.command) !== 'btw-chat') return next(e)
 
+    await update($, scrollBack, () => 0)
     const opened = await $.ui.open({
       id: PANE,
       title: 'By the way',
       focus: true,
       closeOnEscape: true,
+      backgroundColor: '#000000',
     })
 
     return {
@@ -134,12 +211,24 @@ export const register: Register = on => {
     if (!question) return { element: e.element, value: '' }
 
     const id = nextId()
+    await update($, scrollBack, () => 0)
     await update($, msgs, list =>
       [...list, { id, q: question, pending: true }].slice(-MAX_EXCHANGES_KEPT),
     )
 
     const prior = (await read($, msgs)).filter(m => m.id !== id)
+    ticker?.cancel()
+    try {
+      ticker = $.clock.every(140, () => {
+        void update($, tick, n => n + 1)
+      })
+    } catch {
+      // No clock in this host (a test harness, say): the spinner stays still.
+      ticker = null
+    }
     const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
+    ticker?.cancel()
+    ticker = null
     const answer = r.isAnswered ? r.text : describeFailure(r)
     await update($, msgs, list =>
       list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
@@ -148,74 +237,104 @@ export const register: Register = on => {
     return { element: e.element, value: '' }
   })
 
+  // The person's wheel and keys over the pane: move our own window instead of
+  // the engine's, which stays pinned so the frame holds still.
+  on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
+    if (e.by === 0) return next(e)
+    await update($, scrollBack, n => Math.max(0, n - e.by))
+    return next({ ...e, offset: 0 })
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Input, Button } = $.ui.resolve(e)
     const list = await read($, msgs)
     const text = await read($, draft)
-    const shown = list.slice(-MAX_EXCHANGES_DRAWN)
+    const back = await read($, scrollBack)
     const columns = e.props.bodyColumns
-    const rule = '─'.repeat(Math.max(8, columns))
+    const fieldRows = rowsFor(text, columns)
+
+    // The history frame's borders and padding take six columns.
+    const width = Math.max(12, columns - 6)
+    // A rule inset by one, so it never covers the pane's own frame.
+    const rule = '─'.repeat(Math.max(8, columns - 2))
+    // Fixed blocks: the padding above and below, the history frame's two
+    // borders, the field's two rules, the footer's margin and its row.
+    const room = Math.max(2, e.props.scroll.bodyRows - (fieldRows + 10))
+
+    const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
+    const rows = buildRows(list, width, frame)
+    const maxStart = Math.max(0, rows.length - room)
+    const start = Math.max(0, maxStart - back)
+    const windowRows = rows.slice(start, start + room)
 
     return (
-      <Box flexDirection="column">
-        {list.length === 0 && (
-          <Box flexDirection="column" marginBottom={1}>
-            <Text color="claude" weight="bold">
-              Side conversation
-            </Text>
-            <Text dimColor>
-              Ask below: each answer forks the session transcript without
-              touching the main conversation.
-            </Text>
-          </Box>
-        )}
-        {list.length > shown.length && (
-          <Text dimColor>
-            … {list.length - shown.length} earlier exchanges hidden
-          </Text>
-        )}
-        {shown.map(m => (
-          <Box flexDirection="column" marginBottom={1}>
-            <Box flexDirection="row">
-              <Text color="claude" weight="bold">
-                ›{' '}
-              </Text>
-              <Text weight="bold">{m.q}</Text>
-            </Box>
-            <Box paddingLeft={2}>
-              <Text dimColor={m.pending}>
-                {m.pending ? 'thinking…' : m.answer}
-              </Text>
-            </Box>
-          </Box>
-        ))}
-        <Box marginTop={1} flexDirection="column">
-          {/* Rules, not a border: a Box border narrows the field without the
-              engine knowing, and every wrapped row then comes out cut with an
-              ellipsis. */}
-          <Text dimColor>{rule}</Text>
-          <Input
-            key="ask"
-            placeholder="Ask a side question…"
-            submitLabel="send"
-            autoFocus
-            value={text}
-            rows={rowsFor(text, columns)}
-            onInput={() => {}}
-            onSubmit={() => {}}
-          />
-          <Text dimColor>{rule}</Text>
-        </Box>
-        <Box marginTop={1} flexDirection="row" justifyContent="space-between">
-          <Text dimColor>enter to send · esc to close</Text>
-          <Button
-            key="clear"
-            onPress={() => {
-              void update($, msgs, () => [])
-            }}
+      <Box
+        flexDirection="column"
+        height={e.props.scroll.bodyRows}
+        backgroundColor="#000000"
+      >
+        <Box flexDirection="column" flexGrow={1} paddingY={1}>
+          {/* The history keeps a fixed height: `room` rows whatever the text,
+              so the frame and the field below it never move. */}
+          <Box
+            flexDirection="column"
+            height={room + 2}
+            borderStyle="round"
+            borderColor="#FFA500"
+            paddingX={2}
           >
-            <Text dimColor>Clear</Text>
-          </Button>
+            {windowRows.map(row => (
+              <Text
+                color={row.kind === 'question' ? 'claude' : undefined}
+                weight={row.kind === 'question' ? 'bold' : undefined}
+                dimColor={
+                  row.kind === 'info' ||
+                  row.kind === 'pending' ||
+                  row.pending
+                }
+              >
+                {row.text}
+              </Text>
+            ))}
+          </Box>
+          <Box flexDirection="column" marginTop={1}>
+            {/* Rules, not a border: a Box border narrows the field without the
+                engine knowing, and every wrapped row then comes out cut with
+                an ellipsis. */}
+            <Box paddingX={1}>
+              <Text dimColor>{rule}</Text>
+            </Box>
+            <Input
+              key="ask"
+              placeholder="Ask a side question…"
+              submitLabel="send"
+              autoFocus
+              value={text}
+              rows={fieldRows}
+              onInput={() => {}}
+              onSubmit={() => {}}
+            />
+            <Box paddingX={1}>
+              <Text dimColor>{rule}</Text>
+            </Box>
+          </Box>
+          <Box
+            marginTop={1}
+            paddingX={2}
+            flexDirection="row"
+            justifyContent="space-between"
+          >
+            <Text dimColor>enter to send · esc to close</Text>
+            <Button
+              key="clear"
+              onPress={() => {
+                void update($, msgs, () => [])
+                void update($, scrollBack, () => 0)
+              }}
+            >
+              <Text dimColor>Clear</Text>
+            </Button>
+          </Box>
         </Box>
       </Box>
     )

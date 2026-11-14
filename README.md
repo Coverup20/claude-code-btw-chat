@@ -30,11 +30,13 @@ Restart Claude Code or run `/reload-plugins` after install or update.
 ## Usage
 
 Run `/btw-chat` to open the "By the way" pane, type a question, press Enter.
-The ask field wraps a long question onto up to six rows and grows with it,
-the way the prompt box does. The answer appears in the pane; ask a follow-up
-and it sees both the session transcript and the earlier side exchanges (the
-last 12 are carried in each fork prompt). The **Clear** button resets the side
-conversation. Escape closes the pane.
+The exchange is drawn in a framed window of fixed height, the person's
+questions marked `❯` and the answers `●`, with a spinner while a fork runs;
+the wheel scrolls back through it. The ask field wraps a long question onto
+up to six rows and grows with it, the way the prompt box does. Each answer
+forks the session transcript without touching the main conversation; the
+last 12 side exchanges travel with the fork prompt. The **Clear** button
+resets the side conversation. Escape closes the pane.
 
 The pane is placed from 144 columns (110 once opened from the command);
 below that it waits undrawn for a wider terminal.
