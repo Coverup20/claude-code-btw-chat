@@ -10,8 +10,6 @@ const PANE = 'btw-chat'
 const MAX_EXCHANGES_IN_PROMPT = 12
 // How many exchanges the session keeps at all.
 const MAX_EXCHANGES_KEPT = 50
-// Rows of the fixed strip that echoes a draft longer than the field.
-const DRAFT_ROWS = 3
 
 const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
   shape: 'msgs-1',
@@ -229,16 +227,20 @@ export const register: Register = on => {
     // the text grows, at most six.
     // One row keeps the surface's own hint down to the bare ⏎ glyph; a draft
     // longer than the field is shown wrapped, in dim, just above it.
-    const inputRows = 1
-    // The field's own text is clipped at its width by the surface, so the
-    // draft is echoed here, wrapped, in a strip of fixed height: the layout
-    // never moves and nothing typed goes unseen.
-    const draftLines = text.trim() === '' ? [] : wrap(text, width)
-    const draftView = draftLines.slice(-DRAFT_ROWS)
-    // The frame is an overlay and takes no rows: the padding (two), the input
-    // block (its two border rows, its field, its top margin), the fixed draft
-    // strip and its margin, and the footer (its two margins and its row).
-    const overhead = 2 + (inputRows + 3) + (DRAFT_ROWS + 1) + 3
+    // A multi-row field is the only way the surface shows a long draft whole;
+    // the hint it draws beside it is the price. Rows follow the text.
+    const inputWidth = Math.max(8, width - 24)
+    const typedRows = text
+      .split('\n')
+      .reduce(
+        (n, line) => n + Math.max(1, Math.ceil(line.length / inputWidth)),
+        0,
+      )
+    const inputRows = Math.min(6, Math.max(1, typedRows))
+    // The frame is an overlay and takes no rows: only the padding (two), the
+    // input block (its two border rows, its field, its top margin) and the
+    // footer (its two margins and its row) come off the body.
+    const overhead = 2 + (inputRows + 3) + 3
     const room = Math.max(2, e.props.scroll.bodyRows - overhead)
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
@@ -287,12 +289,8 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
-        <Box flexDirection="column" height={DRAFT_ROWS} marginTop={1}>
-          {draftView.map(line => (
-            <Text dimColor>{line}</Text>
-          ))}
-        </Box>
         <Box
+          marginTop={1}
           borderStyle="round"
           borderColor="promptBorder"
           paddingX={1}
