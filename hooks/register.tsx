@@ -1,5 +1,6 @@
 import { atom, read, update } from 'claude-code'
 import type {
+  ClientProps,
   EngineInterface,
   ModelForkResult,
   Register,
@@ -312,6 +313,9 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const resolved = $.ui.resolve(e)
     const { Box, Text, Button } = resolved
+    // A surface that offers Client gets the wrapping editor; the rest keep the
+    // native field. Decided by the element table, not the surface's name.
+    const canClient = 'Client' in (resolved as object) && e.surface !== 'terminal'
     const list = await read($, msgs)
     const text = await read($, draft)
     const back = await read($, scrollBack)
@@ -329,10 +333,9 @@ export const register: Register = on => {
     }
 
     const bodyRows = e.props.scroll.bodyRows
-    const inputRows =
-      e.surface === 'desktop'
-        ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
-        : 1
+    const inputRows = canClient
+      ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
+      : 1
 
     const overhead = inputRows + 8
     const room = Math.max(1, bodyRows - overhead)
@@ -344,8 +347,12 @@ export const register: Register = on => {
     const windowRows = rows.slice(start, start + room)
 
     let composer: RenderElement
-    if (e.surface === 'desktop') {
-      const { Client } = $.ui.resolve(e)
+    if (canClient) {
+      const Client = (
+        resolved as unknown as {
+          Client: (props: ClientProps) => RenderElement
+        }
+      ).Client
       composer = (
         <Client
           key="composer"
@@ -363,7 +370,7 @@ export const register: Register = on => {
         />
       )
     } else {
-      const { Input } = $.ui.resolve(e)
+      const { Input } = resolved
       composer = (
         <Input
           key="ask"
@@ -434,6 +441,9 @@ export const register: Register = on => {
           flexDirection="row"
           justifyContent="space-between"
         >
+          <Text dimColor>
+            s{e.surface} c{canClient ? 1 : 0}
+          </Text>
           <Button
             key="clear"
             onPress={() => {
