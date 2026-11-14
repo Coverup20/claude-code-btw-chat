@@ -147,7 +147,15 @@ export const register: Register = on => {
     const inputRows = Math.min(6, Math.max(1, typedRows))
 
     return (
-      <Box flexDirection="column" flexGrow={1} backgroundColor="#000000">
+      <Box
+        flexDirection="column"
+        flexGrow={1}
+        backgroundColor="#000000"
+        borderStyle="round"
+        borderColor="#FFA500"
+        paddingX={1}
+        paddingY={1}
+      >
         {list.length === 0 && (
           <Box flexDirection="column" marginBottom={1}>
             <Text color="claude" weight="bold">
@@ -200,6 +208,7 @@ export const register: Register = on => {
         <Box
           marginTop={1}
           marginBottom={1}
+          paddingLeft={2}
           flexDirection="row"
           justifyContent="space-between"
         >
