@@ -220,6 +220,10 @@ export const register: Register = on => {
           borderColor="#FFA500"
         />
         <Box flexDirection="column" flexGrow={1}>
+          <Text dimColor>
+            dbg b{e.props.scroll.bodyRows} v{String(e.viewport?.rows ?? '?')} r
+            {room} n{rows.length} s{start}
+          </Text>
           {windowRows.map(row => (
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
