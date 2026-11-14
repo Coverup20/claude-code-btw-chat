@@ -208,12 +208,9 @@ export const register: Register = on => {
     const rows = buildRows(list, width)
     const maxStart = Math.max(0, rows.length - room)
     const start = Math.max(0, maxStart - back)
-    // Exactly `room` rows, blanks when the conversation is shorter: the tree's
-    // height must not follow the text.
+    // The history box holds `room` rows by its own height, so nothing has to
+    // pad the short case: filler text rows showed as a highlighted block.
     const windowRows = rows.slice(start, start + room)
-    while (windowRows.length < room) {
-      windowRows.push({ text: ' ', kind: 'answer', pending: false })
-    }
 
     return (
       <Box
