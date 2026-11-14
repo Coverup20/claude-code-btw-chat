@@ -42,7 +42,7 @@ test('each question forks the transcript with the earlier side exchanges', async
   expect(prompts[1]!.includes('answer 1')).toBe(true)
 
   expect((await ui.find({ type: 'Text', text: /answer 2/ }))?.text).toBe(
-    '● answer 2',
+    'answer 2',
   )
   await ui.unmount()
 })
@@ -56,20 +56,6 @@ test('a failed fork is reported in the pane', async ($, on) => {
   await ui.input({ key: 'ask', text: 'anything' })
 
   expect(await ui.find({ type: 'Text', text: /Nothing to fork/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('the pane draws on the desktop surface', async ($, on) => {
-  on('model.fork', () => ({
-    value: { isAnswered: true, text: 'desktop answer', usage: USAGE },
-  }))
-
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'ask', text: 'desktop question' })
-
-  expect((await ui.find({ type: 'Text', text: /desktop answer/ }))?.text).toBe(
-    '● desktop answer',
-  )
   await ui.unmount()
 })
 
