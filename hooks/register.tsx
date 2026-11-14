@@ -209,6 +209,7 @@ export const register: Register = on => {
           marginTop={1}
           marginBottom={1}
           paddingLeft={2}
+          paddingRight={2}
           flexDirection="row"
           justifyContent="space-between"
         >
