@@ -359,7 +359,8 @@ export const register: Register = on => {
         ? Math.min(6, Math.max(1, text.split('\n').length))
         : 1 + unfocusedRows
 
-    const overhead = inputRows + 8
+    // Padding (two), the field and its top margin, the footer's three rows.
+    const overhead = inputRows + 6
     const room = Math.max(1, bodyRows - overhead)
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
@@ -455,13 +456,7 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
-        <Box
-          marginTop={1}
-          borderStyle="round"
-          borderColor="promptBorder"
-          paddingX={1}
-          flexDirection="column"
-        >
+        <Box marginTop={1} paddingX={1} flexDirection="column">
           {composer}
         </Box>
         <Box
