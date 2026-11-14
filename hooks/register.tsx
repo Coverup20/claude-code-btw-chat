@@ -165,7 +165,7 @@ export const register: Register = on => {
               </Text>
               <Text weight="bold">{m.q}</Text>
             </Box>
-            <Box paddingLeft={2}>
+            <Box paddingLeft={2} marginTop={1}>
               <Text dimColor={m.pending}>
                 {m.pending ? 'thinking…' : m.answer}
               </Text>
