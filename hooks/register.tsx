@@ -189,21 +189,17 @@ export const register: Register = on => {
     const width = Math.max(12, e.props.bodyColumns - 6)
     // The field is as tall as what was typed: one row at rest, wrapping as
     // the text grows, at most six.
-    // The surface draws its own hint beside the field ("⏎ · shift+⏎ new
-    // line"); the typed text wraps in what is left, so the estimate takes
-    // those columns off too.
-    const inputWidth = Math.max(8, width - 24)
-    const typedRows = text
-      .split('\n')
-      .reduce(
-        (n, line) => n + Math.max(1, Math.ceil(line.length / inputWidth)),
-        0,
-      )
-    const inputRows = Math.min(8, Math.max(1, typedRows))
+    // One row keeps the surface's own hint down to the bare ⏎ glyph; a draft
+    // longer than the field is shown wrapped, in dim, just above it.
+    const inputRows = 1
+    const draftLines = text.trim() === '' ? [] : wrap(text, width)
+    const preview = draftLines.length > 1 ? draftLines.slice(0, 4) : []
     // The frame is an overlay and takes no rows: only the padding (two), the
-    // input block (its two border rows, its field, its top margin) and the
-    // footer (its two margins and its row) come off the body.
-    const overhead = 2 + (inputRows + 3) + 3
+    // input block (its two border rows, its field, its top margin), the draft
+    // preview when one shows, and the footer (its two margins and its row)
+    // come off the body.
+    const previewRows = preview.length === 0 ? 0 : preview.length + 1
+    const overhead = 2 + (inputRows + 3) + previewRows + 3
     const room = Math.max(2, e.props.scroll.bodyRows - overhead)
 
     const rows = buildRows(list, width)
@@ -242,6 +238,13 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
+        {preview.length > 0 && (
+          <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+            {preview.map(line => (
+              <Text dimColor>{line}</Text>
+            ))}
+          </Box>
+        )}
         <Box
           marginTop={1}
           borderStyle="round"
