@@ -97,12 +97,14 @@ function buildRows(list: readonly BtwMessage[], width: number): Row[] {
     for (const text of wrap(`› ${m.q}`, width)) {
       rows.push({ text, kind: 'question', pending: false })
     }
-    rows.push({ text: '', kind: 'answer', pending: false })
+    // A space, not an empty string: the desktop surface gives an empty Text no
+    // row, which would leave the tree shorter than bodyRows.
+    rows.push({ text: ' ', kind: 'answer', pending: false })
     const answer = m.pending ? 'thinking…' : (m.answer ?? '')
     for (const text of wrap(answer, width)) {
       rows.push({ text, kind: 'answer', pending: m.pending })
     }
-    rows.push({ text: '', kind: 'answer', pending: false })
+    rows.push({ text: ' ', kind: 'answer', pending: false })
   }
   return rows
 }
@@ -187,10 +189,16 @@ export const register: Register = on => {
     const width = Math.max(12, e.props.bodyColumns - 6)
     // The field is as tall as what was typed: one row at rest, wrapping as
     // the text grows, at most six.
+    // A margin of four columns over the real field width: underestimating the
+    // wrap keeps the field too short and clips what was typed.
+    const inputWidth = Math.max(10, width - 4)
     const typedRows = text
       .split('\n')
-      .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
-    const inputRows = Math.min(6, Math.max(1, typedRows))
+      .reduce(
+        (n, line) => n + Math.max(1, Math.ceil(line.length / inputWidth)),
+        0,
+      )
+    const inputRows = Math.min(8, Math.max(1, typedRows))
     // The frame is an overlay and takes no rows: only the padding (two), the
     // input block (its two border rows, its field, its top margin) and the
     // footer (its two margins and its row) come off the body.
@@ -220,10 +228,6 @@ export const register: Register = on => {
           borderColor="#FFA500"
         />
         <Box flexDirection="column" flexGrow={1}>
-          <Text dimColor>
-            dbg b{e.props.scroll.bodyRows} v{String(e.viewport?.rows ?? '?')} r
-            {room} n{rows.length} s{start}
-          </Text>
           {windowRows.map(row => (
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
