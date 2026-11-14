@@ -356,7 +356,7 @@ export const register: Register = on => {
     const inputRows = canClient
       ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
       : isFocused
-        ? Math.min(6, Math.max(3, text.split('\n').length))
+        ? Math.min(6, Math.max(1, text.split('\n').length))
         : 1 + unfocusedRows
 
     const overhead = inputRows + 8
@@ -472,9 +472,6 @@ export const register: Register = on => {
           flexDirection="row"
           justifyContent="space-between"
         >
-          <Text dimColor>
-            d{text.length} f{isFocused ? 1 : 0}
-          </Text>
           <Button
             key="clear"
             onPress={() => {
