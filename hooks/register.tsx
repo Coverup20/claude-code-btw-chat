@@ -333,9 +333,12 @@ export const register: Register = on => {
     }
 
     const bodyRows = e.props.scroll.bodyRows
+    // Where Client exists the editor wraps by itself; on the terminal the
+    // field never wraps, so it starts at three rows and grows with the
+    // newlines the person types (Shift+Enter).
     const inputRows = canClient
       ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
-      : 1
+      : Math.min(6, Math.max(3, text.split('\n').length))
 
     const overhead = inputRows + 8
     const room = Math.max(1, bodyRows - overhead)
@@ -377,7 +380,7 @@ export const register: Register = on => {
           placeholder="Ask a side question…"
           submitLabel=""
           autoFocus
-          rows={1}
+          rows={inputRows}
           value={text}
           onInput={() => {}}
           onSubmit={() => {}}
@@ -441,9 +444,6 @@ export const register: Register = on => {
           flexDirection="row"
           justifyContent="space-between"
         >
-          <Text dimColor>
-            s{e.surface} c{canClient ? 1 : 0}
-          </Text>
           <Button
             key="clear"
             onPress={() => {
