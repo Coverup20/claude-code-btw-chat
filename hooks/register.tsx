@@ -126,11 +126,21 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
+        <Box flexDirection="row" justifyContent="space-between" marginBottom={1}>
+          <Text color="claude" weight="bold">
+            By the way
+          </Text>
+          <Text dimColor>
+            {list.length} exchange{list.length === 1 ? '' : 's'}
+          </Text>
+        </Box>
         {list.length === 0 && (
-          <Box flexDirection="column" marginBottom={1}>
-            <Text color="claude" weight="bold">
-              Side conversation
-            </Text>
+          <Box
+            borderStyle="round"
+            borderColor="promptBorder"
+            paddingX={1}
+            marginBottom={1}
+          >
             <Text dimColor>
               Ask below: each answer forks the session transcript without
               touching the main conversation.
@@ -143,7 +153,13 @@ export const register: Register = on => {
           </Text>
         )}
         {shown.map(m => (
-          <Box flexDirection="column" marginBottom={1}>
+          <Box
+            flexDirection="column"
+            borderStyle="round"
+            borderColor="promptBorder"
+            paddingX={1}
+            marginBottom={1}
+          >
             <Box flexDirection="row">
               <Text color="claude" weight="bold">
                 ›{' '}
@@ -157,12 +173,7 @@ export const register: Register = on => {
             </Box>
           </Box>
         ))}
-        <Box
-          marginTop={1}
-          borderStyle="single"
-          borderColor="promptBorder"
-          paddingX={1}
-        >
+        <Box borderStyle="single" borderColor="promptBorder" paddingX={1}>
           <Input
             key="ask"
             placeholder="Ask a side question…"
