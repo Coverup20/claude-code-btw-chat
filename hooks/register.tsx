@@ -442,19 +442,21 @@ export const register: Register = on => {
         >
         {/* The history keeps a fixed height too: `room` rows whatever the text. */}
         <Box flexDirection="column" height={room}>
-          {windowRows.map(row => (
-            <Text
-              color={row.kind === 'question' ? 'claude' : undefined}
-              weight={row.kind === 'question' ? 'bold' : undefined}
-              dimColor={
-                row.kind === 'info' ||
-                row.kind === 'pending' ||
-                row.pending
-              }
-            >
-              {row.text}
-            </Text>
-          ))}
+          {windowRows.map(row =>
+            row.kind === 'question' ? (
+              // The main thread's own mark: a green chevron, the text plain.
+              <Box flexDirection="row">
+                <Text color="success">❯ </Text>
+                <Text>{row.text.replace(/^❯ /, '')}</Text>
+              </Box>
+            ) : (
+              <Text
+                dimColor={row.kind === 'info' || row.kind === 'pending' || row.pending}
+              >
+                {row.text}
+              </Text>
+            ),
+          )}
         </Box>
         <Box marginTop={1} paddingX={1} flexDirection="column">
           {composer}
