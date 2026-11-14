@@ -299,7 +299,6 @@ export const register: Register = on => {
           <Input
             key="ask"
             placeholder="Ask a side question…"
-            submitLabel=""
             autoFocus
             rows={inputRows}
             value={text}
