@@ -72,3 +72,25 @@ test('a blank submit forks nothing', async ($, on) => {
   expect(calls).toBe(0)
   await ui.unmount()
 })
+
+test('the ask field grows rows as the question wraps', async ($, on) => {
+  on('model.fork', () => ({
+    value: { isAnswered: true, text: 'unused', usage: USAGE },
+  }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const rows = async () =>
+    (await ui.find({ type: 'Input', key: 'ask' }))?.props.rows as number
+
+  expect(await rows()).toBe(1)
+
+  // 60 body columns less the box and label leave ~50: this wraps onto 3.
+  await ui.input({ key: 'ask', text: 'd'.repeat(140), kind: 'change' })
+  expect(await rows()).toBe(3)
+
+  // Past the cap it stops growing and scrolls within.
+  await ui.input({ key: 'ask', text: 'd'.repeat(2000), kind: 'change' })
+  expect(await rows()).toBe(6)
+
+  await ui.unmount()
+})

@@ -12,6 +12,13 @@ const MAX_EXCHANGES_IN_PROMPT = 12
 const MAX_EXCHANGES_DRAWN = 8
 // How many exchanges the session keeps at all.
 const MAX_EXCHANGES_KEPT = 50
+// How many rows the ask field grows to before it scrolls instead. The native
+// prompt wraps a long line onto more rows; this one follows it, up to a cap so
+// the answers keep their room.
+const MAX_INPUT_ROWS = 6
+// Cells the field does not get to draw text in: the box's border and padding,
+// and the room the submit label keeps beside the field while it has focus.
+const INPUT_CHROME_COLUMNS = 10
 
 const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
   shape: 'msgs-1',
@@ -51,6 +58,17 @@ function describeFailure(r: ModelForkResult): string {
     case 'aborted':
       return 'Aborted — the turn was interrupted.'
   }
+}
+
+// The field's height for what it holds, as the native prompt box sizes itself:
+// one row for a short question, one more for each row the text wraps onto, so
+// a long line breaks inside the box instead of scrolling out of sight.
+function rowsFor(text: string, bodyColumns: number): number {
+  const width = Math.max(8, bodyColumns - INPUT_CHROME_COLUMNS)
+  const rows = text
+    .split('\n')
+    .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
+  return Math.min(MAX_INPUT_ROWS, Math.max(1, rows))
 }
 
 // Accept 'btw-chat', 'btw-chat:btw-chat' and '/btw-chat': the matcher form
@@ -169,6 +187,7 @@ export const register: Register = on => {
             submitLabel="send"
             autoFocus
             value={text}
+            rows={rowsFor(text, e.props.bodyColumns)}
             onInput={() => {}}
             onSubmit={() => {}}
           />
