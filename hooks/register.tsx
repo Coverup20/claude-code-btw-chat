@@ -16,9 +16,11 @@ const MAX_EXCHANGES_KEPT = 50
 // prompt wraps a long line onto more rows; this one follows it, up to a cap so
 // the answers keep their room.
 const MAX_INPUT_ROWS = 6
-// Cells the field does not get to draw text in: the box's border and padding,
-// and the room the submit label keeps beside the field while it has focus.
-const INPUT_CHROME_COLUMNS = 10
+// The submit hint the engine draws beside a focused multi-row field, and the
+// short one it falls back to when the long form would take more than half the
+// field. Either steals room from the text, so the wrap width counts it.
+const HINT_LONG_COLUMNS = 27 // " ⏎ send · shift+⏎ new line"
+const HINT_SHORT_COLUMNS = 7 // " ⏎ send"
 
 const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
   shape: 'msgs-1',
@@ -61,10 +63,20 @@ function describeFailure(r: ModelForkResult): string {
 }
 
 // The field's height for what it holds, as the native prompt box sizes itself:
-// one row for a short question, one more for each row the text wraps onto, so
-// a long line breaks inside the box instead of scrolling out of sight.
+// one row for a short question, one more for each row the text wraps onto.
+//
+// The engine draws the field across the whole pane body, keeping the submit
+// hint beside it and wrapping the text one cell narrower than the room that
+// leaves. It knows nothing of a border drawn around the field: one would take
+// cells the engine still counts as text, and every wrapped row would come out
+// cut with an ellipsis. So the field is drawn bare and its wrap width is
+// counted here, from the same numbers the engine uses.
 function rowsFor(text: string, bodyColumns: number): number {
-  const width = Math.max(8, bodyColumns - INPUT_CHROME_COLUMNS)
+  const hint =
+    bodyColumns - HINT_LONG_COLUMNS >= bodyColumns / 2
+      ? HINT_LONG_COLUMNS
+      : HINT_SHORT_COLUMNS
+  const width = Math.max(8, bodyColumns - hint - 1)
   const rows = text
     .split('\n')
     .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
@@ -141,6 +153,8 @@ export const register: Register = on => {
     const list = await read($, msgs)
     const text = await read($, draft)
     const shown = list.slice(-MAX_EXCHANGES_DRAWN)
+    const columns = e.props.bodyColumns
+    const rule = '─'.repeat(Math.max(8, columns))
 
     return (
       <Box flexDirection="column">
@@ -175,22 +189,22 @@ export const register: Register = on => {
             </Box>
           </Box>
         ))}
-        <Box
-          marginTop={1}
-          borderStyle="single"
-          borderColor="promptBorder"
-          paddingX={1}
-        >
+        <Box marginTop={1} flexDirection="column">
+          {/* Rules, not a border: a Box border narrows the field without the
+              engine knowing, and every wrapped row then comes out cut with an
+              ellipsis. */}
+          <Text dimColor>{rule}</Text>
           <Input
             key="ask"
             placeholder="Ask a side question…"
             submitLabel="send"
             autoFocus
             value={text}
-            rows={rowsFor(text, e.props.bodyColumns)}
+            rows={rowsFor(text, columns)}
             onInput={() => {}}
             onSubmit={() => {}}
           />
+          <Text dimColor>{rule}</Text>
         </Box>
         <Box marginTop={1} flexDirection="row" justifyContent="space-between">
           <Text dimColor>enter to send · esc to close</Text>
