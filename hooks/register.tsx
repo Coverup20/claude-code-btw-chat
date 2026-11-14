@@ -56,7 +56,11 @@ function describeFailure(r: ModelForkResult): string {
   }
 }
 
-type Row = { text: string; kind: 'question' | 'answer' | 'info'; pending: boolean }
+type Row = {
+  text: string
+  kind: 'question' | 'answer' | 'info' | 'draft'
+  pending: boolean
+}
 
 // Greedy word wrap; a word longer than the line is cut. One string in, the
 // lines it takes out.
@@ -195,19 +199,23 @@ export const register: Register = on => {
     const draftLines = text.trim() === '' ? [] : wrap(text, width)
     const preview = draftLines.length > 1 ? draftLines.slice(0, 4) : []
     // The frame is an overlay and takes no rows: only the padding (two), the
-    // input block (its two border rows, its field, its top margin), the draft
-    // preview when one shows, and the footer (its two margins and its row)
-    // come off the body.
-    const previewRows = preview.length === 0 ? 0 : preview.length + 1
-    const overhead = 2 + (inputRows + 3) + previewRows + 3
+    // input block (its two border rows, its field, its top margin) and the
+    // footer (its two margins and its row) come off the body.
+    const overhead = 2 + (inputRows + 3) + 3
     const room = Math.max(2, e.props.scroll.bodyRows - overhead)
 
     const rows = buildRows(list, width)
-    const maxStart = Math.max(0, rows.length - room)
+    // A long draft shows wrapped at the tail of the history, in dim: the
+    // layout never moves while the person types.
+    const draftRows: Row[] = preview.map(line => ({
+      text: line,
+      kind: 'draft',
+      pending: false,
+    }))
+    const shownRows = draftRows.length > 0 ? [...rows, ...draftRows] : rows
+    const maxStart = Math.max(0, shownRows.length - room)
     const start = Math.max(0, maxStart - back)
-    // The history box holds `room` rows by its own height, so nothing has to
-    // pad the short case: filler text rows showed as a highlighted block.
-    const windowRows = rows.slice(start, start + room)
+    const windowRows = shownRows.slice(start, start + room)
 
     return (
       <Box
@@ -232,19 +240,12 @@ export const register: Register = on => {
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
               weight={row.kind === 'question' ? 'bold' : undefined}
-              dimColor={row.kind === 'info' || row.pending}
+              dimColor={row.kind === 'info' || row.kind === 'draft' || row.pending}
             >
               {row.text}
             </Text>
           ))}
         </Box>
-        {preview.length > 0 && (
-          <Box flexDirection="column" marginTop={1} paddingLeft={2}>
-            {preview.map(line => (
-              <Text dimColor>{line}</Text>
-            ))}
-          </Box>
-        )}
         <Box
           marginTop={1}
           borderStyle="round"
