@@ -22,6 +22,13 @@ const draft = atom({ plugin: 'btw-chat', key: 'draft' } as const, '', {
 const scrollBack = atom({ plugin: 'btw-chat', key: 'scrollBack' } as const, 0, {
   shape: 'scroll-1',
 })
+// Repaints the thinking spinner while a fork runs.
+const tick = atom({ plugin: 'btw-chat', key: 'tick' } as const, 0, {
+  shape: 'tick-1',
+})
+
+const THINKING_FRAMES = ['✢', '✳', '✶', '✻', '✽'] as const
+let ticker: { cancel: () => void } | null = null
 
 // Unique per session; the timestamp keeps it so across reloads.
 let seq = 0
@@ -58,7 +65,7 @@ function describeFailure(r: ModelForkResult): string {
 
 type Row = {
   text: string
-  kind: 'question' | 'answer' | 'info' | 'draft'
+  kind: 'question' | 'answer' | 'info' | 'draft' | 'pending'
   pending: boolean
 }
 
@@ -89,7 +96,11 @@ function wrap(text: string, width: number): string[] {
   return out
 }
 
-function buildRows(list: readonly BtwMessage[], width: number): Row[] {
+function buildRows(
+  list: readonly BtwMessage[],
+  width: number,
+  frame: string,
+): Row[] {
   if (list.length === 0) {
     return wrap(
       'Ask below: each answer forks the session transcript without touching the main conversation.',
@@ -98,15 +109,25 @@ function buildRows(list: readonly BtwMessage[], width: number): Row[] {
   }
   const rows: Row[] = []
   for (const m of list) {
-    for (const text of wrap(`› ${m.q}`, width)) {
+    // The main thread's own marks: a chevron on what the person said, a bullet
+    // on what came back, a spinner while it thinks.
+    for (const text of wrap(`❯ ${m.q}`, width)) {
       rows.push({ text, kind: 'question', pending: false })
     }
     // A space, not an empty string: the desktop surface gives an empty Text no
     // row, which would leave the tree shorter than bodyRows.
     rows.push({ text: ' ', kind: 'answer', pending: false })
-    const answer = m.pending ? 'thinking…' : (m.answer ?? '')
-    for (const text of wrap(answer, width)) {
-      rows.push({ text, kind: 'answer', pending: m.pending })
+    if (m.pending) {
+      rows.push({ text: `${frame} Thinking…`, kind: 'pending', pending: true })
+    } else {
+      const answer = wrap(m.answer ?? '', width)
+      answer.forEach((line, i) => {
+        rows.push({
+          text: i === 0 ? `● ${line}` : line,
+          kind: 'answer',
+          pending: false,
+        })
+      })
     }
     rows.push({ text: ' ', kind: 'answer', pending: false })
   }
@@ -166,7 +187,18 @@ export const register: Register = on => {
     )
 
     const prior = (await read($, msgs)).filter(m => m.id !== id)
+    ticker?.cancel()
+    try {
+      ticker = $.clock.every(140, () => {
+        void update($, tick, n => n + 1)
+      })
+    } catch {
+      // No clock in this host (a test harness, say): the spinner stays still.
+      ticker = null
+    }
     const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
+    ticker?.cancel()
+    ticker = null
     const answer = r.isAnswered ? r.text : describeFailure(r)
     await update($, msgs, list =>
       list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
@@ -204,7 +236,8 @@ export const register: Register = on => {
     const overhead = 2 + (inputRows + 3) + 3
     const room = Math.max(2, e.props.scroll.bodyRows - overhead)
 
-    const rows = buildRows(list, width)
+    const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
+    const rows = buildRows(list, width, frame)
     // A long draft shows wrapped at the tail of the history, in dim: the
     // layout never moves while the person types.
     const draftRows: Row[] = preview.map(line => ({
@@ -246,7 +279,12 @@ export const register: Register = on => {
             <Text
               color={row.kind === 'question' ? 'claude' : undefined}
               weight={row.kind === 'question' ? 'bold' : undefined}
-              dimColor={row.kind === 'info' || row.kind === 'draft' || row.pending}
+              dimColor={
+                row.kind === 'info' ||
+                row.kind === 'draft' ||
+                row.kind === 'pending' ||
+                row.pending
+              }
             >
               {row.text}
             </Text>

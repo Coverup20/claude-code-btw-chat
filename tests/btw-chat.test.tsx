@@ -42,7 +42,7 @@ test('each question forks the transcript with the earlier side exchanges', async
   expect(prompts[1]!.includes('answer 1')).toBe(true)
 
   expect((await ui.find({ type: 'Text', text: /answer 2/ }))?.text).toBe(
-    'answer 2',
+    '● answer 2',
   )
   await ui.unmount()
 })
@@ -68,7 +68,7 @@ test('the pane draws on the desktop surface', async ($, on) => {
   await ui.input({ key: 'ask', text: 'desktop question' })
 
   expect((await ui.find({ type: 'Text', text: /desktop answer/ }))?.text).toBe(
-    'desktop answer',
+    '● desktop answer',
   )
   await ui.unmount()
 })

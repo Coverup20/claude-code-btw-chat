@@ -11,6 +11,7 @@ declare module 'claude-code' {
       msgs: Shaped<BtwMessage[]>
       draft: Shaped<string>
       scrollBack: Shaped<number>
+      tick: Shaped<number>
     }
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "btw-chat",
-  "version": "0.3.11",
+  "version": "0.4.0",
   "description": "A side pane for a continuous /btw-style conversation over the session transcript",
   "author": {
     "name": "Marzio Bordin"
