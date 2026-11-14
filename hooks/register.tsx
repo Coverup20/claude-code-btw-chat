@@ -183,6 +183,7 @@ export const register: Register = on => {
             placeholder="Ask a side question…"
             submitLabel="send"
             autoFocus
+            rows={3}
             value={text}
             onInput={() => {}}
             onSubmit={() => {}}
