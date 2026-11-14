@@ -127,10 +127,15 @@ export const register: Register = on => {
     return (
       <Box flexDirection="column">
         {list.length === 0 && (
-          <Text dimColor>
-            No side questions yet. Ask below: each answer forks the session
-            transcript without touching the main conversation.
-          </Text>
+          <Box flexDirection="column" marginBottom={1}>
+            <Text color="claude" weight="bold">
+              Side conversation
+            </Text>
+            <Text dimColor>
+              Ask below: each answer forks the session transcript without
+              touching the main conversation.
+            </Text>
+          </Box>
         )}
         {list.length > shown.length && (
           <Text dimColor>
@@ -138,28 +143,46 @@ export const register: Register = on => {
           </Text>
         )}
         {shown.map(m => (
-          <Box flexDirection="column">
-            <Text weight="bold">› {m.q}</Text>
-            <Text dimColor={m.pending}>{m.pending ? '…' : m.answer}</Text>
+          <Box flexDirection="column" marginBottom={1}>
+            <Box flexDirection="row">
+              <Text color="claude" weight="bold">
+                ›{' '}
+              </Text>
+              <Text weight="bold">{m.q}</Text>
+            </Box>
+            <Box paddingLeft={2}>
+              <Text dimColor={m.pending}>
+                {m.pending ? 'thinking…' : m.answer}
+              </Text>
+            </Box>
           </Box>
         ))}
-        <Input
-          key="ask"
-          placeholder="Ask a side question…"
-          submitLabel="ask"
-          autoFocus
-          value={text}
-          onInput={() => {}}
-          onSubmit={() => {}}
-        />
-        <Box flexDirection="row">
+        <Box
+          marginTop={1}
+          borderStyle="single"
+          borderColor="promptBorder"
+          paddingX={1}
+        >
+          <Input
+            key="ask"
+            placeholder="Ask a side question…"
+            submitLabel="send"
+            autoFocus
+            value={text}
+            onInput={() => {}}
+            onSubmit={() => {}}
+          />
+        </Box>
+        <Box marginTop={1} flexDirection="row" justifyContent="space-between">
+          <Text dimColor>enter to send · esc to close</Text>
           <Button
             key="clear"
-            label="Clear"
             onPress={() => {
               void update($, msgs, () => [])
             }}
-          />
+          >
+            <Text dimColor>Clear</Text>
+          </Button>
         </Box>
       </Box>
     )
