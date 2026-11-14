@@ -257,15 +257,17 @@ export const register: Register = on => {
     const width = Math.max(12, columns - 6)
     // A rule inset by one, so it never covers the pane's own frame.
     const rule = '─'.repeat(Math.max(8, columns - 2))
-    // Fixed blocks: the padding above and below, the history frame's two
-    // borders, the field's two rules, the footer's margin and its row.
-    const room = Math.max(2, e.props.scroll.bodyRows - (fieldRows + 10))
+    // Rows the exchanges may take: everything but the padding, the field and
+    // the footer. The frame shrinks to its content, so an empty pane is a small
+    // box at the top, not a tall one with a blank middle.
+    const capacity = Math.max(1, e.props.scroll.bodyRows - (fieldRows + 10))
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
-    const maxStart = Math.max(0, rows.length - room)
+    const frameRows = Math.min(capacity, Math.max(1, rows.length))
+    const maxStart = Math.max(0, rows.length - frameRows)
     const start = Math.max(0, maxStart - back)
-    const windowRows = rows.slice(start, start + room)
+    const windowRows = rows.slice(start, start + frameRows)
 
     return (
       <Box
@@ -274,11 +276,12 @@ export const register: Register = on => {
         backgroundColor="#000000"
       >
         <Box flexDirection="column" flexGrow={1} paddingY={1}>
-          {/* The history keeps a fixed height: `room` rows whatever the text,
-              so the frame and the field below it never move. */}
+          {/* The exchanges keep a frame of their own, as tall as they need and
+              never taller than the pane leaves: the field stays at the bottom
+              and an empty pane stays small. */}
           <Box
             flexDirection="column"
-            height={room + 2}
+            height={frameRows + 2}
             borderStyle="round"
             borderColor="#FFA500"
             paddingX={2}
@@ -297,12 +300,14 @@ export const register: Register = on => {
               </Text>
             ))}
           </Box>
+          {/* Holds the field down at the bottom while the exchanges are few. */}
+          <Box flexGrow={1} />
           <Box flexDirection="column" marginTop={1}>
             {/* Rules, not a border: a Box border narrows the field without the
                 engine knowing, and every wrapped row then comes out cut with
                 an ellipsis. */}
             <Box paddingX={1}>
-              <Text dimColor>{rule}</Text>
+              <Text color="promptBorder">{rule}</Text>
             </Box>
             <Input
               key="ask"
@@ -315,7 +320,7 @@ export const register: Register = on => {
               onSubmit={() => {}}
             />
             <Box paddingX={1}>
-              <Text dimColor>{rule}</Text>
+              <Text color="promptBorder">{rule}</Text>
             </Box>
           </Box>
           <Box
