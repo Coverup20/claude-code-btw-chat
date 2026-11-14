@@ -10,15 +10,6 @@ const PANE = 'btw-chat'
 const MAX_EXCHANGES_IN_PROMPT = 12
 // How many exchanges the session keeps at all.
 const MAX_EXCHANGES_KEPT = 50
-// How many rows the ask field grows to before it scrolls instead. The native
-// prompt wraps a long line onto more rows; this one follows it, up to a cap so
-// the answers keep their room.
-const MAX_INPUT_ROWS = 6
-// The submit hint the engine draws beside a focused multi-row field, and the
-// short one it falls back to when the long form would take more than half the
-// field. Either steals room from the text, so the wrap width counts it.
-const HINT_LONG_COLUMNS = 27 // " ⏎ send · shift+⏎ new line"
-const HINT_SHORT_COLUMNS = 7 // " ⏎ send"
 
 const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
   shape: 'msgs-1',
@@ -70,27 +61,6 @@ function describeFailure(r: ModelForkResult): string {
     case 'aborted':
       return 'Aborted — the turn was interrupted.'
   }
-}
-
-// The field's height for what it holds, as the native prompt box sizes itself:
-// one row for a short question, one more for each row the text wraps onto.
-//
-// The engine draws the field across the whole pane body, keeping the submit
-// hint beside it and wrapping the text one cell narrower than the room that
-// leaves. It knows nothing of a border drawn around the field: one would take
-// cells the engine still counts as text, and every wrapped row would come out
-// cut with an ellipsis. So the field is drawn bare and its wrap width is
-// counted here, from the same numbers the engine uses.
-function rowsFor(text: string, bodyColumns: number): number {
-  const hint =
-    bodyColumns - HINT_LONG_COLUMNS >= bodyColumns / 2
-      ? HINT_LONG_COLUMNS
-      : HINT_SHORT_COLUMNS
-  const width = Math.max(8, bodyColumns - hint - 1)
-  const rows = text
-    .split('\n')
-    .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
-  return Math.min(MAX_INPUT_ROWS, Math.max(1, rows))
 }
 
 type Row = {
@@ -251,22 +221,26 @@ export const register: Register = on => {
     const text = await read($, draft)
     const back = await read($, scrollBack)
     const columns = e.props.bodyColumns
-    const fieldRows = rowsFor(text, columns)
 
-    // One column of air on the left, the exchanges and the field alike. The
-    // field cannot take a second one: the engine counts its width from the pane
-    // body and leaves exactly one cell spare, so a wider inset would cut the
-    // tail of the row.
+    // The field is one row and keeps the engine's hint down to the bare ⏎: a
+    // multi-row field makes the engine draw "send · shift+⏎ new line" and hold
+    // some twenty-five columns of every row for it. A longer question is shown
+    // above the field, wrapped here at the width we choose.
+    const previewWidth = Math.max(12, columns - 3)
+    const previewLines = text === '' ? [] : wrap(text, previewWidth)
+    const preview = previewLines.length > 1 ? previewLines : []
+
+    // The exchanges take whatever the field, its frame, the preview and the
+    // footer leave.
     const width = Math.max(12, columns - 2)
-    // The field's frame, full width: two cornered rules. They cost the field
-    // nothing — a Box border would, and the engine would then cut every
-    // wrapped row with an ellipsis.
     const flat = '─'.repeat(Math.max(8, columns - 2))
     const top = `╭${flat}╮`
     const bottom = `╰${flat}╯`
-    // Rows the exchanges may take: everything but the field, its rules and the
-    // footer.
-    const capacity = Math.max(1, e.props.scroll.bodyRows - (fieldRows + 8))
+    const capacity = Math.max(
+      1,
+      e.props.scroll.bodyRows -
+        (preview.length === 0 ? 8 : preview.length + 9),
+    )
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
@@ -294,21 +268,28 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
+        {/* A question longer than the field is shown whole, wrapped, just above
+            it. The engine's own prefixed hint is kept down to the bare ⏎ by the
+            one-row field. */}
+        {preview.length > 0 && (
+          <Box flexDirection="column" paddingX={2} marginBottom={1}>
+            {preview.map(line => (
+              <Text dimColor>{line}</Text>
+            ))}
+          </Box>
+        )}
         <Box flexDirection="column">
           <Text color="promptBorder">{top}</Text>
           {/* The frame spans the pane; only the text inside it is indented, so
-              the cursor starts clear of the left border. One column is the most
-              the engine allows: it counts the field's width from the pane body
-              and leaves just one cell spare, so a wider inset would cut the
-              tail of every full row. */}
-          <Box paddingLeft={1}>
+              the cursor starts clear of the left border. */}
+          <Box paddingLeft={2}>
             <Input
               key="ask"
               placeholder="Ask a side question…"
-              submitLabel="send"
+              submitLabel=""
               autoFocus
               value={text}
-              rows={fieldRows}
+              rows={1}
               onInput={() => {}}
               onSubmit={() => {}}
             />
