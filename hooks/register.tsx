@@ -10,14 +10,15 @@ const PANE = 'btw-chat'
 const MAX_EXCHANGES_IN_PROMPT = 12
 // How many exchanges the session keeps at all.
 const MAX_EXCHANGES_KEPT = 50
-// How many rows the field grows to before it scrolls instead.
-const MAX_FIELD_ROWS = 6
-// How wide the engine's submit hint is beside a focused field: the long form
-// it draws for a multi-row field, and the bare one it falls back to when the
-// pane is too narrow for the long form. The field's text wraps one cell
-// narrower than the room these leave, so both count here.
-const HINT_LONG_COLUMNS = 23 // " ⏎  · shift+⏎ new line" with submitLabel=""
-const HINT_SHORT_COLUMNS = 3 // " ⏎ "
+// How many rows the ask field grows to before it scrolls instead. The native
+// prompt wraps a long line onto more rows; this one follows it, up to a cap so
+// the answers keep their room.
+const MAX_INPUT_ROWS = 6
+// The submit hint the engine draws beside a focused multi-row field, and the
+// short one it falls back to when the long form would take more than half the
+// field. Either steals room from the text, so the wrap width counts it.
+const HINT_LONG_COLUMNS = 27 // " ⏎ send · shift+⏎ new line"
+const HINT_SHORT_COLUMNS = 7 // " ⏎ send"
 
 const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
   shape: 'msgs-1',
@@ -71,24 +72,25 @@ function describeFailure(r: ModelForkResult): string {
   }
 }
 
-// The engine sizes the field from the pane body and keeps its submit hint
-// beside it. Which hint it draws depends on the room: the long form when it
-// fits in half the field, the bare ⏎ otherwise. Both are counted here, so the
-// field's wrap width and the row count match what the engine will draw.
-function hintColumns(bodyColumns: number): number {
-  return bodyColumns - HINT_LONG_COLUMNS >= bodyColumns / 2
-    ? HINT_LONG_COLUMNS
-    : HINT_SHORT_COLUMNS
-}
-
-// How many rows the question needs at the field's width: one at rest, one more
-// for each row it wraps onto, never more than the cap.
+// The field's height for what it holds, as the native prompt box sizes itself:
+// one row for a short question, one more for each row the text wraps onto.
+//
+// The engine draws the field across the whole pane body, keeping the submit
+// hint beside it and wrapping the text one cell narrower than the room that
+// leaves. It knows nothing of a border drawn around the field: one would take
+// cells the engine still counts as text, and every wrapped row would come out
+// cut with an ellipsis. So the field is drawn bare and its wrap width is
+// counted here, from the same numbers the engine uses.
 function rowsFor(text: string, bodyColumns: number): number {
-  const width = Math.max(8, bodyColumns - hintColumns(bodyColumns) - 1)
+  const hint =
+    bodyColumns - HINT_LONG_COLUMNS >= bodyColumns / 2
+      ? HINT_LONG_COLUMNS
+      : HINT_SHORT_COLUMNS
+  const width = Math.max(8, bodyColumns - hint - 1)
   const rows = text
     .split('\n')
     .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
-  return Math.min(MAX_FIELD_ROWS, Math.max(1, rows))
+  return Math.min(MAX_INPUT_ROWS, Math.max(1, rows))
 }
 
 type Row = {
@@ -249,23 +251,22 @@ export const register: Register = on => {
     const text = await read($, draft)
     const back = await read($, scrollBack)
     const columns = e.props.bodyColumns
-
-    // The field grows with the question, and its own box is cut to the text's
-    // room: what lies beyond is the engine's submit hint, which needs no more
-    // showing than the bare ⏎ the one-row form of it would be.
-    const hint = hintColumns(columns)
     const fieldRows = rowsFor(text, columns)
-    const fieldWidth = Math.max(12, columns - hint)
 
-    // The exchanges take whatever the field, its frame and the footer leave.
+    // One column of air on the left, the exchanges and the field alike. The
+    // field cannot take a second one: the engine counts its width from the pane
+    // body and leaves exactly one cell spare, so a wider inset would cut the
+    // tail of the row.
     const width = Math.max(12, columns - 2)
+    // The field's frame, full width: two cornered rules. They cost the field
+    // nothing — a Box border would, and the engine would then cut every
+    // wrapped row with an ellipsis.
     const flat = '─'.repeat(Math.max(8, columns - 2))
     const top = `╭${flat}╮`
     const bottom = `╰${flat}╯`
-    const capacity = Math.max(
-      1,
-      e.props.scroll.bodyRows - (fieldRows + 8),
-    )
+    // Rows the exchanges may take: everything but the field, its rules and the
+    // footer.
+    const capacity = Math.max(1, e.props.scroll.bodyRows - (fieldRows + 8))
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
@@ -295,22 +296,22 @@ export const register: Register = on => {
         </Box>
         <Box flexDirection="column">
           <Text color="promptBorder">{top}</Text>
-          {/* The frame spans the pane; the text inside it is indented two
-              columns, and the box that holds it is cut where the text's room
-              ends — the engine's hint sits past that cut, out of sight. */}
-          <Box paddingLeft={2}>
-            <Box width={fieldWidth} overflow="hidden">
-              <Input
-                key="ask"
-                placeholder="Ask a side question…"
-                submitLabel=""
-                autoFocus
-                value={text}
-                rows={fieldRows}
-                onInput={() => {}}
-                onSubmit={() => {}}
-              />
-            </Box>
+          {/* The frame spans the pane; only the text inside it is indented, so
+              the cursor starts clear of the left border. One column is the most
+              the engine allows: it counts the field's width from the pane body
+              and leaves just one cell spare, so a wider inset would cut the
+              tail of every full row. */}
+          <Box paddingLeft={1}>
+            <Input
+              key="ask"
+              placeholder="Ask a side question…"
+              submitLabel="send"
+              autoFocus
+              value={text}
+              rows={fieldRows}
+              onInput={() => {}}
+              onSubmit={() => {}}
+            />
           </Box>
           <Text color="promptBorder">{bottom}</Text>
         </Box>
