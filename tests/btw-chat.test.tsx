@@ -59,6 +59,20 @@ test('a failed fork is reported in the pane', async ($, on) => {
   await ui.unmount()
 })
 
+test('the pane draws on the desktop surface', async ($, on) => {
+  on('model.fork', () => ({
+    value: { isAnswered: true, text: 'desktop answer', usage: USAGE },
+  }))
+
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.input({ key: 'ask', text: 'desktop question' })
+
+  expect((await ui.find({ type: 'Text', text: /desktop answer/ }))?.text).toBe(
+    'desktop answer',
+  )
+  await ui.unmount()
+})
+
 test('a blank submit forks nothing', async ($, on) => {
   let calls = 0
   on('model.fork', () => {
