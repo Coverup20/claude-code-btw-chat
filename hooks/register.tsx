@@ -189,7 +189,7 @@ export const register: Register = on => {
             onSubmit={() => {}}
           />
         </Box>
-        <Box marginTop={1} flexDirection="row" justifyContent="space-between">
+        <Box flexDirection="row" justifyContent="space-between">
           <Text dimColor>enter to send</Text>
           <Button
             key="clear"
