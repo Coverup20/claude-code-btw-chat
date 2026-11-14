@@ -1,0 +1,20 @@
+{
+  "name": "claude-code-btw-chat",
+  "owner": {
+    "name": "Marzio Bordin"
+  },
+  "metadata": {
+    "description": "A side pane for a continuous /btw-style conversation over the Claude Code session transcript"
+  },
+  "plugins": [
+    {
+      "name": "btw-chat",
+      "description": "A pane and slash command for a continuous /btw conversation",
+      "source": {
+        "source": "npm",
+        "package": "claude-code-btw-chat",
+        "version": "0.1.0"
+      }
+    }
+  ]
+}

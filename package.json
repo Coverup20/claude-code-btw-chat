@@ -1,0 +1,32 @@
+{
+  "name": "claude-code-btw-chat",
+  "version": "0.1.0",
+  "description": "A side pane for a continuous /btw-style conversation over the Claude Code session transcript",
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "btw",
+    "side-chat",
+    "pane",
+    "mod"
+  ],
+  "homepage": "https://github.com/Coverup20/claude-code-btw-chat#readme",
+  "bugs": {
+    "url": "https://github.com/Coverup20/claude-code-btw-chat/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Coverup20/claude-code-btw-chat.git"
+  },
+  "license": "MIT",
+  "author": "Marzio Bordin",
+  "type": "module",
+  "files": [
+    ".claude-plugin",
+    "hooks",
+    "types",
+    "tests",
+    "README.md",
+    "LICENSE"
+  ]
+}
