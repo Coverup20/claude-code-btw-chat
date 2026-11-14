@@ -10,6 +10,7 @@ declare module 'claude-code' {
     'btw-chat': {
       msgs: Shaped<BtwMessage[]>
       draft: Shaped<string>
+      scrollBack: Shaped<number>
     }
   }
 }
