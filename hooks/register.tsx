@@ -1,5 +1,10 @@
 import { atom, read, update } from 'claude-code'
-import type { ModelForkResult, Register } from 'claude-code'
+import type {
+  EngineInterface,
+  ModelForkResult,
+  Register,
+  RenderElement,
+} from 'claude-code'
 
 import type { BtwMessage } from '../types'
 
@@ -26,6 +31,13 @@ const scrollBack = atom({ plugin: 'btw-chat', key: 'scrollBack' } as const, 0, {
 const tick = atom({ plugin: 'btw-chat', key: 'tick' } as const, 0, {
   shape: 'tick-1',
 })
+const composerAck = atom(
+  { plugin: 'btw-chat', key: 'composerAck' } as const,
+  { clientId: '', revision: 0, submitted: 0 },
+  {
+    shape: 'composer-1',
+  },
+)
 
 const THINKING_FRAMES = ['✢', '✳', '✶', '✻', '✽'] as const
 let ticker: { cancel: () => void } | null = null
@@ -63,9 +75,35 @@ function describeFailure(r: ModelForkResult): string {
   }
 }
 
+async function askQuestion($: EngineInterface, question: string) {
+  const id = nextId()
+  await update($, scrollBack, () => 0)
+  await update($, msgs, list =>
+    [...list, { id, q: question, pending: true }].slice(-MAX_EXCHANGES_KEPT),
+  )
+
+  const prior = (await read($, msgs)).filter(m => m.id !== id)
+  ticker?.cancel()
+  try {
+    ticker = $.clock.every(140, () => {
+      void update($, tick, n => n + 1)
+    })
+  } catch {
+    // No clock in this host (a test harness, say): the spinner stays still.
+    ticker = null
+  }
+  const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
+  ticker?.cancel()
+  ticker = null
+  const answer = r.isAnswered ? r.text : describeFailure(r)
+  await update($, msgs, list =>
+    list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
+  )
+}
+
 type Row = {
   text: string
-  kind: 'question' | 'answer' | 'info' | 'draft' | 'pending'
+  kind: 'question' | 'answer' | 'info' | 'pending'
   pending: boolean
 }
 
@@ -134,6 +172,50 @@ function buildRows(
   return rows
 }
 
+type ValidatedSubmission = { sequence: number; text: string }
+type ValidatedComposerData = {
+  clientId: string
+  revision: number
+  draft: string
+  submissions: ValidatedSubmission[]
+}
+
+function parseComposerData(raw: unknown): ValidatedComposerData | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const obj = raw as Record<string, unknown>
+
+  const clientId = obj.clientId
+  if (typeof clientId !== 'string' || clientId === '' || clientId.length > 128) return null
+
+  const revision = obj.revision
+  if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision <= 0) return null
+
+  const draft = obj.draft
+  if (typeof draft !== 'string' || draft.length > 24000) return null
+
+  const subs = obj.submissions
+  if (!Array.isArray(subs) || subs.length > 100) return null
+
+  const submissions: ValidatedSubmission[] = []
+  let prevSeq = 0
+  for (const s of subs) {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) return null
+    const subObj = s as Record<string, unknown>
+
+    const seq = subObj.sequence
+    if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq <= 0) return null
+    if (seq <= prevSeq) return null
+    prevSeq = seq
+
+    const text = subObj.text
+    if (typeof text !== 'string' || text.length > 24000 || text.trim() === '') return null
+
+    submissions.push({ sequence: seq, text })
+  }
+
+  return { clientId, revision, draft, submissions }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -179,32 +261,44 @@ export const register: Register = on => {
     const question = e.value.trim()
     await update($, draft, () => '')
     if (!question) return { element: e.element, value: '' }
-
-    const id = nextId()
-    await update($, scrollBack, () => 0)
-    await update($, msgs, list =>
-      [...list, { id, q: question, pending: true }].slice(-MAX_EXCHANGES_KEPT),
-    )
-
-    const prior = (await read($, msgs)).filter(m => m.id !== id)
-    ticker?.cancel()
-    try {
-      ticker = $.clock.every(140, () => {
-        void update($, tick, n => n + 1)
-      })
-    } catch {
-      // No clock in this host (a test harness, say): the spinner stays still.
-      ticker = null
-    }
-    const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
-    ticker?.cancel()
-    ticker = null
-    const answer = r.isAnswered ? r.text : describeFailure(r)
-    await update($, msgs, list =>
-      list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
-    )
+    await askQuestion($, question)
 
     return { element: e.element, value: '' }
+  })
+
+  on('ui.message', { component: 'Pane', requestId: PANE, element: 'composer' }, async ($, e) => {
+    const data = parseComposerData(e.data)
+    if (!data) return {}
+
+    let accepted = false
+    let questions: ValidatedSubmission[] = []
+
+    await update($, composerAck, current => {
+      accepted = false
+      questions = []
+      const sameId = data.clientId === current.clientId
+      if (sameId && data.revision <= current.revision) {
+        return current
+      }
+      accepted = true
+      const previousSubmitted = sameId ? current.submitted : 0
+      questions = data.submissions.filter(s => s.sequence > previousSubmitted)
+      const lastSeq = data.submissions.length > 0 ? data.submissions[data.submissions.length - 1]!.sequence : 0
+      return {
+        clientId: data.clientId,
+        revision: data.revision,
+        submitted: Math.max(previousSubmitted, lastSeq),
+      }
+    })
+
+    if (!accepted) return {}
+
+    await update($, draft, () => data.draft)
+    for (const sub of questions) {
+      await askQuestion($, sub.text.trim())
+    }
+
+    return {}
   })
 
   // The person's wheel and keys over the pane: move our own window instead of
@@ -216,28 +310,32 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Input, Button } = $.ui.resolve(e)
+    const resolved = $.ui.resolve(e)
+    const { Box, Text, Button } = resolved
     const list = await read($, msgs)
     const text = await read($, draft)
     const back = await read($, scrollBack)
+    const ack = await read($, composerAck)
 
     // Frame border and padding take six columns; keep a sane floor.
     const width = Math.max(12, e.props.bodyColumns - 6)
-    // The field is as tall as what was typed: one row at rest, wrapping as
-    // the text grows, at most six.
-    // One row keeps the surface's own hint down to the bare ⏎ glyph; a draft
-    // longer than the field is shown wrapped, in dim, just above it.
-    // The surface never wraps the field's text: a longer one is cut with an
-    // ellipsis whatever `rows` says. One row, and the tail of the draft echoes
-    // dim below it, so nothing typed stays unseen.
-    const inputRows = 1
-    const tail =
-      text.length > width - 4 ? `…${text.slice(-(width - 5))}` : ''
-    // The frame is an overlay and takes no rows: the padding (two), the input
-    // block (its two border rows, its field, its top margin), the tail line
-    // and the footer (its two margins and its row).
-    const overhead = 2 + (inputRows + 3) + 1 + 3
-    const room = Math.max(2, e.props.scroll.bodyRows - overhead)
+    const composerColumns = Math.max(4, e.props.bodyColumns - 10)
+
+    const effWidth = Math.max(1, composerColumns - 1)
+    let estimatedRows = 0
+    for (const para of text.split('\n')) {
+      const len = [...para].length
+      estimatedRows += Math.max(1, Math.floor(len / effWidth) + 1)
+    }
+
+    const bodyRows = e.props.scroll.bodyRows
+    const inputRows =
+      e.surface === 'desktop'
+        ? Math.min(Math.max(1, Math.floor((bodyRows - 8) / 2)), Math.max(2, estimatedRows))
+        : 1
+
+    const overhead = inputRows + 8
+    const room = Math.max(1, bodyRows - overhead)
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
@@ -245,10 +343,45 @@ export const register: Register = on => {
     const start = Math.max(0, maxStart - back)
     const windowRows = rows.slice(start, start + room)
 
+    let composer: RenderElement
+    if (e.surface === 'desktop') {
+      const { Client } = $.ui.resolve(e)
+      composer = (
+        <Client
+          key="composer"
+          module="./composer.tsx"
+          width="100%"
+          height={inputRows}
+          props={{
+            value: text,
+            columns: composerColumns,
+            rows: inputRows,
+            ackClient: ack.clientId,
+            ackRevision: ack.revision,
+            ackSubmit: ack.submitted,
+          }}
+        />
+      )
+    } else {
+      const { Input } = $.ui.resolve(e)
+      composer = (
+        <Input
+          key="ask"
+          placeholder="Ask a side question…"
+          submitLabel=""
+          autoFocus
+          rows={1}
+          value={text}
+          onInput={() => {}}
+          onSubmit={() => {}}
+        />
+      )
+    }
+
     return (
       <Box
         flexDirection="column"
-        height={e.props.scroll.bodyRows}
+        height={bodyRows}
         backgroundColor="#000000"
       >
         {/* No padding on this Box: the overlay's offsets measure from its
@@ -276,7 +409,6 @@ export const register: Register = on => {
               weight={row.kind === 'question' ? 'bold' : undefined}
               dimColor={
                 row.kind === 'info' ||
-                row.kind === 'draft' ||
                 row.kind === 'pending' ||
                 row.pending
               }
@@ -290,22 +422,9 @@ export const register: Register = on => {
           borderStyle="round"
           borderColor="promptBorder"
           paddingX={1}
+          flexDirection="column"
         >
-          <Input
-            key="ask"
-            placeholder="Ask a side question…"
-            // The surface prefixes any submitLabel with its own ⏎ glyph, so an
-            // empty one is the smallest hint it draws.
-            submitLabel=""
-            autoFocus
-            rows={inputRows}
-            value={text}
-            onInput={() => {}}
-            onSubmit={() => {}}
-          />
-        </Box>
-        <Box height={1} paddingLeft={2}>
-          <Text dimColor>{tail}</Text>
+          {composer}
         </Box>
         <Box
           marginTop={1}
