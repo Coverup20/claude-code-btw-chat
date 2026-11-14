@@ -126,7 +126,7 @@ export const register: Register = on => {
     const shown = list.slice(-MAX_EXCHANGES_DRAWN)
 
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" flexGrow={1} backgroundColor="#000000">
         {list.length === 0 && (
           <Box flexDirection="column" marginBottom={1}>
             <Text color="claude" weight="bold">
