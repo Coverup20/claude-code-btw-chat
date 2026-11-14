@@ -39,6 +39,17 @@ function buildPrompt(prior: readonly BtwMessage[], question: string): string {
   return `${SIDE_PREAMBLE}\n\n${soFar}\n\nCurrent question:\n${question}`
 }
 
+// Keeps the newest row in view; a pane not placed yet simply denies.
+async function scrollToEnd($: {
+  ui: { scroll: (args: { in: string; to: 'end' }) => Promise<unknown> }
+}) {
+  try {
+    await $.ui.scroll({ in: PANE, to: 'end' })
+  } catch {
+    // Nothing placed to scroll.
+  }
+}
+
 function describeFailure(r: ModelForkResult): string {
   if (r.isAnswered) return ''
   switch (r.reason) {
@@ -82,6 +93,7 @@ export const register: Register = on => {
       closeOnEscape: true,
       backgroundColor: '#000000',
     })
+    if (opened.isPlaced) await scrollToEnd($)
 
     return {
       text: opened.isPlaced
@@ -108,6 +120,7 @@ export const register: Register = on => {
     await update($, msgs, list =>
       [...list, { id, q: question, pending: true }].slice(-MAX_EXCHANGES_KEPT),
     )
+    await scrollToEnd($)
 
     const prior = (await read($, msgs)).filter(m => m.id !== id)
     const r = await $.model.fork({ prompt: buildPrompt(prior, question) })
@@ -115,6 +128,7 @@ export const register: Register = on => {
     await update($, msgs, list =>
       list.map(m => (m.id === id ? { ...m, answer, pending: false } : m)),
     )
+    await scrollToEnd($)
 
     return { element: e.element, value: '' }
   })
