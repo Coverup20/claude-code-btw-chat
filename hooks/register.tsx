@@ -184,19 +184,24 @@ export const register: Register = on => {
           borderStyle="single"
           borderColor="promptBorder"
           paddingX={1}
+          flexDirection="row"
+          justifyContent="space-between"
         >
-          <Input
-            key="ask"
-            placeholder="Ask a side question…"
-            submitLabel=""
-            autoFocus
-            rows={inputRows}
-            value={text}
-            onInput={() => {}}
-            onSubmit={() => {}}
-          />
+          <Box flexGrow={1}>
+            <Input
+              key="ask"
+              placeholder="Ask a side question…"
+              submitLabel=""
+              autoFocus
+              rows={inputRows}
+              value={text}
+              onInput={() => {}}
+              onSubmit={() => {}}
+            />
+          </Box>
+          <Text dimColor>⏎</Text>
         </Box>
-        <Box flexDirection="row" justifyContent="space-between">
+        <Box marginTop={1} flexDirection="row" justifyContent="space-between">
           <Text dimColor>enter to send</Text>
           <Button
             key="clear"
