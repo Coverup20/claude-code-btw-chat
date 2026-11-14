@@ -208,12 +208,17 @@ export const register: Register = on => {
     const rows = buildRows(list, width)
     const maxStart = Math.max(0, rows.length - room)
     const start = Math.max(0, maxStart - back)
+    // Exactly `room` rows, blanks when the conversation is shorter: the tree's
+    // height must not follow the text.
     const windowRows = rows.slice(start, start + room)
+    while (windowRows.length < room) {
+      windowRows.push({ text: ' ', kind: 'answer', pending: false })
+    }
 
     return (
       <Box
         flexDirection="column"
-        flexGrow={1}
+        height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
         paddingX={2}
         paddingY={1}
