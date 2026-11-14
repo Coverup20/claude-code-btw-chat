@@ -444,6 +444,7 @@ export const register: Register = on => {
           flexDirection="row"
           justifyContent="space-between"
         >
+          <Text dimColor>d{text.length}</Text>
           <Button
             key="clear"
             onPress={() => {
