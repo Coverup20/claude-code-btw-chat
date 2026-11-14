@@ -253,21 +253,22 @@ export const register: Register = on => {
     const columns = e.props.bodyColumns
     const fieldRows = rowsFor(text, columns)
 
-    // The history frame's borders and padding take six columns.
-    const width = Math.max(12, columns - 6)
-    // A rule inset by one, so it never covers the pane's own frame.
-    const rule = '─'.repeat(Math.max(8, columns - 2))
-    // Rows the exchanges may take: everything but the padding, the field and
-    // the footer. The frame shrinks to its content, so an empty pane is a small
-    // box at the top, not a tall one with a blank middle.
-    const capacity = Math.max(1, e.props.scroll.bodyRows - (fieldRows + 10))
+    // The exchanges sit in the pane's own two columns of padding.
+    const width = Math.max(12, columns - 4)
+    // The field's frame: two cornered rules, full width. They cost the field
+    // nothing — a Box border would, and the engine would then cut every
+    // wrapped row with an ellipsis.
+    const flat = '─'.repeat(Math.max(8, columns - 2))
+    const top = `╭${flat}╮`
+    const bottom = `╰${flat}╯`
+    // Rows the exchanges may take: everything but the field, its rules and the
+    // footer.
+    const capacity = Math.max(1, e.props.scroll.bodyRows - (fieldRows + 8))
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
     const rows = buildRows(list, width, frame)
-    const frameRows = Math.min(capacity, Math.max(1, rows.length))
-    const maxStart = Math.max(0, rows.length - frameRows)
-    const start = Math.max(0, maxStart - back)
-    const windowRows = rows.slice(start, start + frameRows)
+    const start = Math.max(0, Math.max(0, rows.length - capacity) - back)
+    const windowRows = rows.slice(start, start + capacity)
 
     return (
       <Box
@@ -275,71 +276,52 @@ export const register: Register = on => {
         height={e.props.scroll.bodyRows}
         backgroundColor="#000000"
       >
-        <Box flexDirection="column" flexGrow={1} paddingY={1}>
-          {/* The exchanges keep a frame of their own, as tall as they need and
-              never taller than the pane leaves: the field stays at the bottom
-              and an empty pane stays small. */}
-          <Box
-            flexDirection="column"
-            height={frameRows + 2}
-            borderStyle="round"
-            borderColor="#FFA500"
-            paddingX={2}
-          >
-            {windowRows.map(row => (
-              <Text
-                color={row.kind === 'question' ? 'claude' : undefined}
-                weight={row.kind === 'question' ? 'bold' : undefined}
-                dimColor={
-                  row.kind === 'info' ||
-                  row.kind === 'pending' ||
-                  row.pending
-                }
-              >
-                {row.text}
-              </Text>
-            ))}
-          </Box>
-          {/* Holds the field down at the bottom while the exchanges are few. */}
-          <Box flexGrow={1} />
-          <Box flexDirection="column" marginTop={1}>
-            {/* Rules, not a border: a Box border narrows the field without the
-                engine knowing, and every wrapped row then comes out cut with
-                an ellipsis. */}
-            <Box paddingX={1}>
-              <Text color="promptBorder">{rule}</Text>
-            </Box>
-            <Input
-              key="ask"
-              placeholder="Ask a side question…"
-              submitLabel="send"
-              autoFocus
-              value={text}
-              rows={fieldRows}
-              onInput={() => {}}
-              onSubmit={() => {}}
-            />
-            <Box paddingX={1}>
-              <Text color="promptBorder">{rule}</Text>
-            </Box>
-          </Box>
-          <Box
-            marginTop={1}
-            paddingX={2}
-            flexDirection="row"
-            justifyContent="space-between"
-          >
-            <Text dimColor>enter to send · esc to close</Text>
-            <Button
-              key="clear"
-              onPress={() => {
-                void update($, msgs, () => [])
-                void update($, scrollBack, () => 0)
-              }}
+        <Box flexDirection="column" flexGrow={1} paddingX={2} paddingY={1}>
+          {windowRows.map(row => (
+            <Text
+              color={row.kind === 'question' ? 'claude' : undefined}
+              weight={row.kind === 'question' ? 'bold' : undefined}
+              dimColor={
+                row.kind === 'info' ||
+                row.kind === 'pending' ||
+                row.pending
+              }
             >
-              <Text dimColor>Clear</Text>
-            </Button>
-          </Box>
+              {row.text}
+            </Text>
+          ))}
+        </Box>
+        <Box flexDirection="column">
+          <Text color="promptBorder">{top}</Text>
+          <Input
+            key="ask"
+            placeholder="Ask a side question…"
+            submitLabel="send"
+            autoFocus
+            value={text}
+            rows={fieldRows}
+            onInput={() => {}}
+            onSubmit={() => {}}
+          />
+          <Text color="promptBorder">{bottom}</Text>
+        </Box>
+        <Box
+          marginTop={1}
+          marginBottom={1}
+          paddingX={2}
+          flexDirection="row"
+          justifyContent="space-between"
+        >
+          <Text dimColor>enter to send · esc to close</Text>
+          <Button
+            key="clear"
+            onPress={() => {
+              void update($, msgs, () => [])
+              void update($, scrollBack, () => 0)
+            }}
+          >
+            <Text dimColor>Clear</Text>
+          </Button>
         </Box>
       </Box>
     )
