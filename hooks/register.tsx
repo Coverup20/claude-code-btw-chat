@@ -53,6 +53,15 @@ function describeFailure(r: ModelForkResult): string {
   }
 }
 
+// Accept 'btw-chat', 'btw-chat:btw-chat' and '/btw-chat': the matcher form
+// `{ command: 'btw-chat' }` has been observed to miss the handler on some
+// builds, and plugin commands may arrive namespaced.
+function commandName(value: unknown): string {
+  const raw = String(value ?? '').trim().replace(/^\//, '')
+  const last = raw.includes(':') ? raw.split(':').pop() || raw : raw
+  return last.replace(/^\//, '')
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -63,7 +72,9 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'btw-chat' }, async $ => {
+  on('command.run', async ($, e, next) => {
+    if (commandName(e.command) !== 'btw-chat') return next(e)
+
     const opened = await $.ui.open({
       id: PANE,
       title: 'By the way',
