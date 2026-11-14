@@ -190,7 +190,7 @@ export const register: Register = on => {
           />
         </Box>
         <Box marginTop={1} flexDirection="row" justifyContent="space-between">
-          <Text dimColor>enter to send · esc to close</Text>
+          <Text dimColor>enter to send · shift+enter for a new line · esc to close</Text>
           <Button
             key="clear"
             onPress={() => {
