@@ -191,10 +191,10 @@ export const register: Register = on => {
       .split('\n')
       .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
     const inputRows = Math.min(6, Math.max(1, typedRows))
-    // The frame (two border rows, two padding rows), the input block (its two
-    // border rows, its field, its top margin) and the footer (its two margins
-    // and its row) come off the body before the content window.
-    const overhead = 4 + (inputRows + 3) + 3
+    // The frame is an overlay and takes no rows: only the padding (two), the
+    // input block (its two border rows, its field, its top margin) and the
+    // footer (its two margins and its row) come off the body.
+    const overhead = 2 + (inputRows + 3) + 3
     const room = Math.max(2, e.props.scroll.bodyRows - overhead)
 
     const rows = buildRows(list, width)
