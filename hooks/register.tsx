@@ -138,6 +138,13 @@ export const register: Register = on => {
     const list = await read($, msgs)
     const text = await read($, draft)
     const shown = list.slice(-MAX_EXCHANGES_DRAWN)
+    // The field is as tall as what was typed, never taller: one row at rest,
+    // wrapping as the text grows. Border and padding take four columns.
+    const columns = Math.max(12, e.props.bodyColumns - 4)
+    const typedRows = text
+      .split('\n')
+      .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / columns)), 0)
+    const inputRows = Math.min(6, Math.max(1, typedRows))
 
     return (
       <Box flexDirection="column" flexGrow={1} backgroundColor="#000000">
@@ -183,7 +190,7 @@ export const register: Register = on => {
             placeholder="Ask a side question…"
             submitLabel=""
             autoFocus
-            rows={3}
+            rows={inputRows}
             value={text}
             onInput={() => {}}
             onSubmit={() => {}}
