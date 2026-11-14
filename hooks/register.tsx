@@ -189,9 +189,10 @@ export const register: Register = on => {
     const width = Math.max(12, e.props.bodyColumns - 6)
     // The field is as tall as what was typed: one row at rest, wrapping as
     // the text grows, at most six.
-    // A margin of four columns over the real field width: underestimating the
-    // wrap keeps the field too short and clips what was typed.
-    const inputWidth = Math.max(10, width - 4)
+    // The surface draws its own hint beside the field ("⏎ · shift+⏎ new
+    // line"); the typed text wraps in what is left, so the estimate takes
+    // those columns off too.
+    const inputWidth = Math.max(8, width - 24)
     const typedRows = text
       .split('\n')
       .reduce(
