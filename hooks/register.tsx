@@ -10,6 +10,14 @@ const PANE = 'btw-chat'
 const MAX_EXCHANGES_IN_PROMPT = 12
 // How many exchanges the session keeps at all.
 const MAX_EXCHANGES_KEPT = 50
+// How many rows the field grows to before it scrolls instead.
+const MAX_FIELD_ROWS = 6
+// How wide the engine's submit hint is beside a focused field: the long form
+// it draws for a multi-row field, and the bare one it falls back to when the
+// pane is too narrow for the long form. The field's text wraps one cell
+// narrower than the room these leave, so both count here.
+const HINT_LONG_COLUMNS = 23 // " ⏎  · shift+⏎ new line" with submitLabel=""
+const HINT_SHORT_COLUMNS = 3 // " ⏎ "
 
 const msgs = atom({ plugin: 'btw-chat', key: 'msgs' } as const, [], {
   shape: 'msgs-1',
@@ -61,6 +69,26 @@ function describeFailure(r: ModelForkResult): string {
     case 'aborted':
       return 'Aborted — the turn was interrupted.'
   }
+}
+
+// The engine sizes the field from the pane body and keeps its submit hint
+// beside it. Which hint it draws depends on the room: the long form when it
+// fits in half the field, the bare ⏎ otherwise. Both are counted here, so the
+// field's wrap width and the row count match what the engine will draw.
+function hintColumns(bodyColumns: number): number {
+  return bodyColumns - HINT_LONG_COLUMNS >= bodyColumns / 2
+    ? HINT_LONG_COLUMNS
+    : HINT_SHORT_COLUMNS
+}
+
+// How many rows the question needs at the field's width: one at rest, one more
+// for each row it wraps onto, never more than the cap.
+function rowsFor(text: string, bodyColumns: number): number {
+  const width = Math.max(8, bodyColumns - hintColumns(bodyColumns) - 1)
+  const rows = text
+    .split('\n')
+    .reduce((n, line) => n + Math.max(1, Math.ceil(line.length / width)), 0)
+  return Math.min(MAX_FIELD_ROWS, Math.max(1, rows))
 }
 
 type Row = {
@@ -222,24 +250,21 @@ export const register: Register = on => {
     const back = await read($, scrollBack)
     const columns = e.props.bodyColumns
 
-    // The field is one row and keeps the engine's hint down to the bare ⏎: a
-    // multi-row field makes the engine draw "send · shift+⏎ new line" and hold
-    // some twenty-five columns of every row for it. A longer question is shown
-    // above the field, wrapped here at the width we choose.
-    const previewWidth = Math.max(12, columns - 3)
-    const previewLines = text === '' ? [] : wrap(text, previewWidth)
-    const preview = previewLines.length > 1 ? previewLines : []
+    // The field grows with the question, and its own box is cut to the text's
+    // room: what lies beyond is the engine's submit hint, which needs no more
+    // showing than the bare ⏎ the one-row form of it would be.
+    const hint = hintColumns(columns)
+    const fieldRows = rowsFor(text, columns)
+    const fieldWidth = Math.max(12, columns - hint)
 
-    // The exchanges take whatever the field, its frame, the preview and the
-    // footer leave.
+    // The exchanges take whatever the field, its frame and the footer leave.
     const width = Math.max(12, columns - 2)
     const flat = '─'.repeat(Math.max(8, columns - 2))
     const top = `╭${flat}╮`
     const bottom = `╰${flat}╯`
     const capacity = Math.max(
       1,
-      e.props.scroll.bodyRows -
-        (preview.length === 0 ? 8 : preview.length + 9),
+      e.props.scroll.bodyRows - (fieldRows + 8),
     )
 
     const frame = THINKING_FRAMES[(await read($, tick)) % THINKING_FRAMES.length] ?? '✻'
@@ -268,31 +293,24 @@ export const register: Register = on => {
             </Text>
           ))}
         </Box>
-        {/* A question longer than the field is shown whole, wrapped, just above
-            it. The engine's own prefixed hint is kept down to the bare ⏎ by the
-            one-row field. */}
-        {preview.length > 0 && (
-          <Box flexDirection="column" paddingX={2} marginBottom={1}>
-            {preview.map(line => (
-              <Text dimColor>{line}</Text>
-            ))}
-          </Box>
-        )}
         <Box flexDirection="column">
           <Text color="promptBorder">{top}</Text>
-          {/* The frame spans the pane; only the text inside it is indented, so
-              the cursor starts clear of the left border. */}
+          {/* The frame spans the pane; the text inside it is indented two
+              columns, and the box that holds it is cut where the text's room
+              ends — the engine's hint sits past that cut, out of sight. */}
           <Box paddingLeft={2}>
-            <Input
-              key="ask"
-              placeholder="Ask a side question…"
-              submitLabel=""
-              autoFocus
-              value={text}
-              rows={1}
-              onInput={() => {}}
-              onSubmit={() => {}}
-            />
+            <Box width={fieldWidth} overflow="hidden">
+              <Input
+                key="ask"
+                placeholder="Ask a side question…"
+                submitLabel=""
+                autoFocus
+                value={text}
+                rows={fieldRows}
+                onInput={() => {}}
+                onSubmit={() => {}}
+              />
+            </Box>
           </Box>
           <Text color="promptBorder">{bottom}</Text>
         </Box>

@@ -73,7 +73,7 @@ test('a blank submit forks nothing', async ($, on) => {
   await ui.unmount()
 })
 
-test('a question longer than the field is shown wrapped above it', async ($, on) => {
+test('the ask field grows with the question', async ($, on) => {
   on('model.fork', () => ({
     value: { isAnswered: true, text: 'unused', usage: USAGE },
   }))
@@ -82,13 +82,16 @@ test('a question longer than the field is shown wrapped above it', async ($, on)
   const fieldRows = async () =>
     (await ui.find({ type: 'Input', key: 'ask' }))?.props.rows as number
 
-  // The field stays one row: the engine's hint is then the bare ⏎.
   expect(await fieldRows()).toBe(1)
 
-  // 60 body columns less the field's indent and its own room: 57-wide lines.
-  await ui.input({ key: 'ask', text: 'd'.repeat(120), kind: 'change' })
-  expect(await ui.find({ type: 'Text', text: /^d{57}$/ })).toBeDefined()
-  expect(await fieldRows()).toBe(1)
+  // 60 body columns less the engine's hint (23) and the cursor cell leave 36:
+  // sixty characters take two rows.
+  await ui.input({ key: 'ask', text: 'd'.repeat(60), kind: 'change' })
+  expect(await fieldRows()).toBe(2)
+
+  // Past the cap it scrolls within the field instead of growing further.
+  await ui.input({ key: 'ask', text: 'd'.repeat(2000), kind: 'change' })
+  expect(await fieldRows()).toBe(6)
 
   await ui.unmount()
 })
