@@ -183,8 +183,8 @@ export const register: Register = on => {
     const text = await read($, draft)
     const back = await read($, scrollBack)
 
-    // Border and padding take four columns; keep a sane floor.
-    const width = Math.max(12, e.props.bodyColumns - 4)
+    // Frame border and padding take six columns; keep a sane floor.
+    const width = Math.max(12, e.props.bodyColumns - 6)
     // The field is as tall as what was typed: one row at rest, wrapping as
     // the text grows, at most six.
     const typedRows = text
@@ -207,11 +207,18 @@ export const register: Register = on => {
         flexDirection="column"
         flexGrow={1}
         backgroundColor="#000000"
-        borderStyle="round"
-        borderColor="#FFA500"
-        paddingX={1}
+        paddingX={2}
         paddingY={1}
       >
+        <Box
+          position="absolute"
+          top={0}
+          left={0}
+          right={0}
+          bottom={0}
+          borderStyle="round"
+          borderColor="#FFA500"
+        />
         <Box flexDirection="column" flexGrow={1}>
           {windowRows.map(row => (
             <Text
